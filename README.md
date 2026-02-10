@@ -54,9 +54,18 @@ Then open **http://localhost:5173** in your browser.
 
 ## First-Time Setup
 
-1. Open the dashboard at http://localhost:5173
-2. Click **Quick Ingest** to fetch agencies and titles from eCFR (~10 seconds)
-3. Click **Full Ingest** to download all CFR content and compute word counts (~5-15 minutes)
+On first launch the server automatically seeds agencies and titles from eCFR. To also compute word counts per agency, trigger a full ingest:
+
+```bash
+# Full ingest (+ download all CFR content and compute word counts, ~5-15 minutes) (recommended)
+curl -X POST http://localhost:3001/api/ingest/full
+
+# Quick ingest (agencies + titles only, ~10-30 seconds) — runs automatically on startup
+curl -X POST http://localhost:3001/api/ingest/quick
+
+# Check ingest progress
+curl http://localhost:3001/api/ingest/status
+```
 
 ## API Documentation
 

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -8,13 +8,10 @@ import {
   Building2,
   FileText,
   Hash,
-  Download,
   Loader2,
   CheckCircle2,
-  AlertCircle,
   ArrowRight,
   BarChart3,
-  RefreshCw,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
@@ -40,66 +37,6 @@ function StatCard({ icon: Icon, label, value, sub, className }) {
           {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
         </div>
       </div>
-    </div>
-  );
-}
-
-function IngestPanel({ status, onQuickIngest, onFullIngest, isLoading }) {
-  const isRunning = status?.status === "running";
-  const pct = status?.total > 0 ? Math.round((status.progress / status.total) * 100) : 0;
-
-  return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
-      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Download className="h-5 w-5" /> Data Ingestion
-      </h2>
-      {isRunning ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{status.message || "Processing..."}</span>
-          </div>
-          <div className="w-full bg-secondary rounded-full h-2">
-            <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {status.progress} / {status.total} titles ({pct}%)
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {status?.status === "completed" && (
-            <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" /> Last completed:{" "}
-              {status.completed_at ? new Date(status.completed_at).toLocaleString() : "N/A"}
-            </p>
-          )}
-          {status?.status === "error" && (
-            <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" /> {status.message}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={onQuickIngest}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className="h-4 w-4" /> Quick Sync (Agencies)
-            </button>
-            <button
-              onClick={onFullIngest}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" /> Full Ingest (+ Word Counts)
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Full ingest downloads all 50 CFR titles and computes word counts per agency. This may take several minutes.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -220,12 +157,12 @@ function TopAgenciesChart({ topAgencies }) {
                 <span className="w-16 text-xs text-right text-muted-foreground tabular-nums shrink-0">
                   {formatNumber(a.total_word_count)}
                 </span>
-                <div className="flex-1 bg-secondary rounded-full h-6 overflow-hidden">
+                <div className="flex-1 bg-muted/50 rounded-full h-7 overflow-hidden">
                   <div
-                    className="bg-primary/80 group-hover:bg-primary h-6 rounded-full transition-all flex items-center px-2"
-                    style={{ width: `${pct}%`, minWidth: "60px" }}
+                    className="bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 h-7 rounded-full transition-all flex items-center px-3"
+                    style={{ width: `${pct}%`, minWidth: "80px" }}
                   >
-                    <span className="text-xs text-primary-foreground font-medium truncate">
+                    <span className="text-xs text-blue-900 dark:text-blue-100 font-medium truncate">
                       {a.short_name || a.name}
                     </span>
                   </div>
@@ -240,13 +177,12 @@ function TopAgenciesChart({ topAgencies }) {
 }
 
 export default function Dashboard() {
-  const queryClient = useQueryClient();
   const setData = useAppStore((s) => s.setData);
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats } = useQuery({
     queryKey: ["stats"],
     queryFn: api.getStats,
-    refetchInterval: 5000,
+    refetchInterval: 10000,
   });
 
   const { data: wordcountData, isLoading: wordcountsLoading } = useQuery({
@@ -254,25 +190,9 @@ export default function Dashboard() {
     queryFn: api.getWordCounts,
   });
 
-  const quickIngest = useMutation({
-    mutationFn: api.triggerQuickIngest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
-      queryClient.invalidateQueries({ queryKey: ["wordcounts"] });
-    },
-  });
-
-  const fullIngest = useMutation({
-    mutationFn: api.triggerFullIngest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
-    },
-  });
-
   if (stats) setData(stats);
 
   const agencies = wordcountData?.wordcounts || [];
-  const ingestStatus = stats?.ingest_status;
 
   return (
     <div className="min-h-screen bg-background">
@@ -305,32 +225,20 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 space-y-6">
-            <IngestPanel
-              status={ingestStatus}
-              onQuickIngest={() => quickIngest.mutate()}
-              onFullIngest={() => fullIngest.mutate()}
-              isLoading={quickIngest.isPending || fullIngest.isPending}
-            />
-            <TopAgenciesChart topAgencies={stats?.top_agencies} />
-          </div>
+        <TopAgenciesChart topAgencies={stats?.top_agencies} />
 
-          <div className="lg:col-span-2">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Building2 className="h-5 w-5" /> All Agencies
-                <span className="text-sm font-normal text-muted-foreground ml-auto">{agencies.length} agencies</span>
-              </h2>
-              {wordcountsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <AgencyTable agencies={agencies} />
-              )}
+        <div className="rounded-xl border bg-card p-6 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Building2 className="h-5 w-5" /> All Agencies
+            <span className="text-sm font-normal text-muted-foreground ml-auto">{agencies.length} agencies</span>
+          </h2>
+          {wordcountsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          </div>
+          ) : (
+            <AgencyTable agencies={agencies} />
+          )}
         </div>
       </main>
     </div>
