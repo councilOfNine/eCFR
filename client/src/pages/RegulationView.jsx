@@ -106,7 +106,7 @@ function groupPartsBySubchapter(parts) {
   return groups;
 }
 
-function TocSidebar({ structure, selectedPart, onSelectPart, titleNumber, chapter, agency }) {
+function TocSidebar({ structure, selectedPart, onSelectPart, titleNumber, chapter, agency, revisionCounts }) {
   const [expandedGroups, setExpandedGroups] = useState(new Set(["__all__"]));
 
   const allParts = useMemo(() => (structure ? flattenParts(structure) : []), [structure]);
@@ -149,21 +149,36 @@ function TocSidebar({ structure, selectedPart, onSelectPart, titleNumber, chapte
               group.parts.map((p) => {
                 const isSelected = selectedPart === p.identifier;
                 const partLabel = p.label_description || p.label || `Part ${p.identifier}`;
+                const revCount = revisionCounts?.[p.identifier];
                 return (
                   <button
                     key={p.identifier}
                     onClick={() => onSelectPart(p.identifier)}
                     title={partLabel}
                     className={cn(
-                      "block w-full text-left py-1.5 px-3 rounded text-xs transition-colors truncate",
+                      "flex items-center justify-between w-full text-left py-1.5 px-3 rounded text-xs transition-colors",
                       group.subchapter && "ml-3",
                       isSelected
                         ? "bg-primary text-primary-foreground font-medium"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
                     )}
                   >
-                    <span className="font-medium">Pt. {p.identifier}</span>
-                    {p.reserved ? " [Reserved]" : ""}
+                    <span className="truncate">
+                      <span className="font-medium">Pt. {p.identifier}</span>
+                      {p.reserved ? " [Reserved]" : ""}
+                    </span>
+                    {revCount > 0 && (
+                      <span
+                        className={cn(
+                          "shrink-0 ml-1.5 tabular-nums text-[10px] rounded-full px-1.5 py-0 min-w-[1.25rem] text-center",
+                          isSelected
+                            ? "bg-primary-foreground/20 text-primary-foreground"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {revCount > 999 ? Math.round(revCount / 1000) + "k" : revCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -174,11 +189,11 @@ function TocSidebar({ structure, selectedPart, onSelectPart, titleNumber, chapte
   );
 }
 
-function DiffView({ titleNumber, date, sections, part }) {
+function DiffView({ titleNumber, date, sections, part, issueDate }) {
   const sectionIds = sections.map((s) => s.identifier).join(",");
   const { data, isLoading, error } = useQuery({
     queryKey: ["diff", titleNumber, date, sectionIds, part],
-    queryFn: () => api.getRegulationDiff(titleNumber, { date, sections: sectionIds, part }),
+    queryFn: () => api.getRegulationDiff(titleNumber, { date, sections: sectionIds, part, issue_date: issueDate }),
     staleTime: 1000 * 60 * 10,
   });
 
@@ -252,9 +267,7 @@ function DiffView({ titleNumber, date, sections, part }) {
   );
 }
 
-function VersionHistory({ titleNumber, chapter, part }) {
-  const [expandedDate, setExpandedDate] = useState(null);
-
+function VersionHistory({ titleNumber, chapter, part, expandedDate, onExpandDate }) {
   const { data, isLoading } = useQuery({
     queryKey: ["versions", titleNumber, chapter, part],
     queryFn: () => api.getRegulationVersions(titleNumber, { chapter, part }),
@@ -275,18 +288,34 @@ function VersionHistory({ titleNumber, chapter, part }) {
 
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground mb-3">
-        {data.total_versions.toLocaleString()} section{data.total_versions !== 1 ? "s" : ""} amended across{" "}
-        {data.grouped_count.toLocaleString()} date{data.grouped_count !== 1 ? "s" : ""}. Click a revision to view the
-        diff.
-      </p>
+      <div className="text-xs text-muted-foreground mb-3 space-y-1">
+        <p>
+          {data.total_versions.toLocaleString()} section{data.total_versions !== 1 ? "s" : ""} amended across{" "}
+          {data.grouped_count.toLocaleString()} date{data.grouped_count !== 1 ? "s" : ""}. Click a revision to view the
+          diff.
+        </p>
+        <p className="text-[10px] leading-relaxed">
+          <span className="font-medium text-foreground/70">Note:</span> Federal regulations are promulgated by executive
+          agencies through the Federal Register rulemaking process, not by individual legislators. Each revision below
+          was published by the responsible agency in the{" "}
+          <a
+            href="https://www.federalregister.gov/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Federal Register
+          </a>
+          .
+        </p>
+      </div>
       <div className="space-y-0.5">
         {data.versions.map((v) => {
           const isExpanded = expandedDate === v.date;
           return (
             <div key={v.date} className={cn("rounded transition-colors", isExpanded && "bg-muted/30")}>
               <button
-                onClick={() => setExpandedDate(isExpanded ? null : v.date)}
+                onClick={() => onExpandDate(isExpanded ? null : v.date)}
                 className="flex items-start gap-3 py-2 px-2 rounded hover:bg-muted/50 text-sm w-full text-left"
               >
                 <span className="shrink-0 pt-0.5">
@@ -301,6 +330,9 @@ function VersionHistory({ titleNumber, chapter, part }) {
                   <span className="text-xs font-medium">
                     {v.sections.length} section{v.sections.length !== 1 ? "s" : ""} amended
                   </span>
+                  {v.issue_date && v.issue_date !== v.date && (
+                    <span className="text-[10px] text-muted-foreground ml-2">(published {v.issue_date})</span>
+                  )}
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {v.sections.slice(0, 8).map((s, i) => (
                       <span
@@ -324,7 +356,13 @@ function VersionHistory({ titleNumber, chapter, part }) {
               </button>
               {isExpanded && (
                 <div className="pb-3 px-2">
-                  <DiffView titleNumber={titleNumber} date={v.date} sections={v.sections} part={part} />
+                  <DiffView
+                    titleNumber={titleNumber}
+                    date={v.date}
+                    sections={v.sections}
+                    part={part}
+                    issueDate={v.issue_date}
+                  />
                 </div>
               )}
             </div>
@@ -380,6 +418,8 @@ function PartContent({ titleNumber, chapter, subtitle, subchapter, part, agency 
     );
   }
 
+  const meta = data.regulatory_meta;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 pb-3 border-b">
@@ -391,6 +431,43 @@ function PartContent({ titleNumber, chapter, subtitle, subchapter, part, agency 
         </div>
         <CopyButton text={window.location.href} />
       </div>
+      {meta && (meta.authority || meta.source) && (
+        <div className="mb-4 rounded-lg border bg-muted/30 px-4 py-3 text-xs space-y-1.5">
+          {meta.authority && (
+            <div>
+              <span className="font-semibold text-foreground/80">Authority: </span>
+              <span className="text-muted-foreground">{meta.authority}</span>
+            </div>
+          )}
+          {meta.source && (
+            <div>
+              <span className="font-semibold text-foreground/80">Source: </span>
+              <span className="text-muted-foreground">{meta.source}</span>
+            </div>
+          )}
+          {meta.fr_citations?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {meta.fr_citations.slice(0, 10).map((fr, i) => (
+                <a
+                  key={i}
+                  href={`https://www.federalregister.gov/citation/${fr.volume}-FR-${fr.page}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-background text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <ExternalLink className="h-2.5 w-2.5" />
+                  {fr.cite}
+                </a>
+              ))}
+              {meta.fr_citations.length > 10 && (
+                <span className="text-[10px] text-muted-foreground self-center">
+                  +{meta.fr_citations.length - 10} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <article
         className="regulation-content prose prose-sm max-w-none dark:prose-invert"
         dangerouslySetInnerHTML={{ __html: data.content_html }}
@@ -409,9 +486,32 @@ export default function RegulationView() {
   const subchapter = searchParams.get("subchapter");
   const part = searchParams.get("part");
   const agency = searchParams.get("agency");
+  const revisionParam = searchParams.get("revision");
 
-  const [activeTab, setActiveTab] = useState("content");
+  const [activeTab, setActiveTab] = useState(revisionParam ? "versions" : "content");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedRevision, setExpandedRevision] = useState(revisionParam || null);
+
+  function handleExpandRevision(date) {
+    setExpandedRevision(date);
+    const next = new URLSearchParams(searchParams);
+    if (date) {
+      next.set("revision", date);
+    } else {
+      next.delete("revision");
+    }
+    setSearchParams(next, { replace: true });
+  }
+
+  function handleSetActiveTab(tab) {
+    setActiveTab(tab);
+    if (tab !== "versions" && expandedRevision) {
+      setExpandedRevision(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete("revision");
+      setSearchParams(next, { replace: true });
+    }
+  }
 
   const { data: versionsData } = useQuery({
     queryKey: ["versions", titleNumber, chapter, part],
@@ -425,6 +525,13 @@ export default function RegulationView() {
   const { data: structureData, isLoading: structureLoading } = useQuery({
     queryKey: ["regulation-structure", titleNumber, chapter, subtitle],
     queryFn: () => api.getRegulationStructure(titleNumber, { chapter, subtitle }),
+    enabled: !!titleNumber,
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const { data: revCountsData } = useQuery({
+    queryKey: ["revision-counts", titleNumber, chapter],
+    queryFn: () => api.getRegulationRevisionCounts(titleNumber, { chapter }),
     enabled: !!titleNumber,
     staleTime: 1000 * 60 * 10,
   });
@@ -456,7 +563,7 @@ export default function RegulationView() {
     if (partId) next.set("part", partId);
     else next.delete("part");
     setSearchParams(next);
-    setActiveTab("content");
+    handleSetActiveTab("content");
   }
 
   const ecfrUrl = `https://www.ecfr.gov/current/title-${titleNumber}${chapter ? "/chapter-" + chapter : ""}${part ? "/part-" + part : ""}`;
@@ -544,6 +651,7 @@ export default function RegulationView() {
                   titleNumber={titleNumber}
                   chapter={chapter}
                   agency={agency}
+                  revisionCounts={revCountsData?.counts}
                 />
               )}
             </div>
@@ -555,7 +663,7 @@ export default function RegulationView() {
           {/* Tab bar */}
           <div className="flex items-center gap-1 mb-4 border-b">
             <button
-              onClick={() => setActiveTab("content")}
+              onClick={() => handleSetActiveTab("content")}
               className={cn(
                 "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px",
                 activeTab === "content"
@@ -567,7 +675,7 @@ export default function RegulationView() {
               Content
             </button>
             <button
-              onClick={() => setActiveTab("versions")}
+              onClick={() => handleSetActiveTab("versions")}
               className={cn(
                 "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px",
                 activeTab === "versions"
@@ -590,7 +698,7 @@ export default function RegulationView() {
               <>
                 {revisionCount > 0 && (
                   <button
-                    onClick={() => setActiveTab("versions")}
+                    onClick={() => handleSetActiveTab("versions")}
                     className="mb-4 w-full flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm text-left hover:bg-primary/10 transition-colors"
                   >
                     <Clock className="h-4 w-4 text-primary shrink-0" />
@@ -646,7 +754,15 @@ export default function RegulationView() {
               </>
             )}
 
-            {activeTab === "versions" && <VersionHistory titleNumber={titleNumber} chapter={chapter} part={part} />}
+            {activeTab === "versions" && (
+              <VersionHistory
+                titleNumber={titleNumber}
+                chapter={chapter}
+                part={part}
+                expandedDate={expandedRevision}
+                onExpandDate={handleExpandRevision}
+              />
+            )}
           </div>
         </main>
       </div>

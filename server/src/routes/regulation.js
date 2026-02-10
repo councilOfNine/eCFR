@@ -82,6 +82,28 @@ function xmlToText(xml) {
     .filter((l) => l.length > 0);
 }
 
+function extractRegulatoryMeta(xml) {
+  const meta = {};
+  // Authority citation
+  const authMatch = xml.match(/<AUTH[^>]*>[\s\S]*?<PSPACE>([\s\S]*?)<\/PSPACE>[\s\S]*?<\/AUTH>/i);
+  if (authMatch) meta.authority = authMatch[1].replace(/<[^>]+>/g, "").trim();
+  // Source citation
+  const srcMatch = xml.match(/<SOURCE[^>]*>[\s\S]*?<PSPACE>([\s\S]*?)<\/PSPACE>[\s\S]*?<\/SOURCE>/i);
+  if (srcMatch) meta.source = srcMatch[1].replace(/<[^>]+>/g, "").trim();
+  // All FR citations (e.g. "73 FR 59194")
+  const frCiteMap = {};
+  function addFrCites(text) {
+    for (const r of text.matchAll(/(\d+)\s+FR\s+(\d+)/g)) {
+      const key = `${r[1]} FR ${r[2]}`;
+      if (!frCiteMap[key]) frCiteMap[key] = { volume: r[1], page: r[2], cite: key };
+    }
+  }
+  for (const m of xml.matchAll(/<CITA[^>]*>([\s\S]*?)<\/CITA>/gi)) addFrCites(m[1]);
+  if (meta.source) addFrCites(meta.source);
+  meta.fr_citations = Object.values(frCiteMap);
+  return meta;
+}
+
 function extractSectionByIdentifier(xml, identifier) {
   const escaped = identifier.replace(/\./g, "\\.");
   const patterns = [
@@ -240,6 +262,48 @@ router.get("/:titleNumber/structure", async (req, res) => {
   }
 });
 
+// ─── GET /regulation/:titleNumber/revision-counts ──────────────────────────────
+// Returns revision counts grouped by part for a chapter. Single eCFR request.
+router.get("/:titleNumber/revision-counts", async (req, res) => {
+  try {
+    const titleNumber = parseInt(req.params.titleNumber, 10);
+    if (isNaN(titleNumber)) return res.status(400).json({ error: "Invalid title number" });
+
+    const { chapter } = req.query;
+
+    let url = `${BASE_URL}/api/versioner/v1/versions/title-${titleNumber}`;
+    if (chapter) url += `?chapter=${chapter}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const verRes = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!verRes.ok) return res.status(502).json({ error: `eCFR versions API error: ${verRes.status}` });
+    const data = await verRes.json();
+
+    const versions = data.content_versions || [];
+    const byPart = {};
+    for (const v of versions) {
+      if (!v.part) continue;
+      byPart[v.part] = (byPart[v.part] || 0) + 1;
+    }
+
+    res.json({ title_number: titleNumber, chapter: chapter || null, counts: byPart });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return res.json({
+        title_number: parseInt(req.params.titleNumber, 10),
+        chapter: req.query.chapter || null,
+        counts: {},
+        timeout: true,
+      });
+    }
+    console.error("Error fetching revision counts:", err);
+    res.status(500).json({ error: "Failed to fetch revision counts" });
+  }
+});
+
 // ─── GET /regulation/:titleNumber/versions ─────────────────────────────────────
 // Returns revision history for a title, filterable by part.
 router.get("/:titleNumber/versions", async (req, res) => {
@@ -309,7 +373,7 @@ router.get("/:titleNumber/diff", async (req, res) => {
     const sectionIds = sections
       .split(",")
       .map((s) => s.trim())
-      .slice(0, 10);
+      .slice(0, 50);
 
     // Compute the day before the amendment date
     const newDate = date;
@@ -317,27 +381,38 @@ router.get("/:titleNumber/diff", async (req, res) => {
     d.setDate(d.getDate() - 1);
     const oldDate = d.toISOString().split("T")[0];
 
-    // Use part-scoped XML fetch when possible (much faster for large titles)
-    const partQs = part ? `?part=${part}` : "";
-    const [oldRes, newRes] = await Promise.all([
-      fetch(`${BASE_URL}/api/versioner/v1/full/${oldDate}/title-${titleNumber}.xml${partQs}`),
-      fetch(`${BASE_URL}/api/versioner/v1/full/${newDate}/title-${titleNumber}.xml${partQs}`),
-    ]);
-
-    if (!oldRes.ok && oldRes.status !== 404) {
-      return res.status(502).json({ error: `Failed to fetch old version: ${oldRes.status}` });
+    // Helper: fetch XML with timeout, returning empty string on error/non-XML
+    async function fetchXml(fetchDate) {
+      const partQs = part ? `?part=${part}` : "";
+      const url = `${BASE_URL}/api/versioner/v1/full/${fetchDate}/title-${titleNumber}.xml${partQs}`;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        const r = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!r.ok) return "";
+        const text = await r.text();
+        // eCFR sometimes returns JSON error even with 200 status
+        if (text.trimStart().startsWith("{")) return "";
+        return text;
+      } catch {
+        return "";
+      }
     }
-    if (!newRes.ok) {
-      return res.status(502).json({ error: `Failed to fetch new version: ${newRes.status}` });
-    }
 
-    const oldScope = oldRes.ok ? await oldRes.text() : "";
-    const newScope = await newRes.text();
+    const [oldScope, newScope] = await Promise.all([fetchXml(oldDate), fetchXml(newDate)]);
+
+    // If new XML is empty, the content may not be available at the amendment_date.
+    // The eCFR uses issue_date for content availability. Try issue_date if provided.
+    let finalNewScope = newScope;
+    if (!finalNewScope && req.query.issue_date) {
+      finalNewScope = await fetchXml(req.query.issue_date);
+    }
 
     const diffs = [];
     for (const secId of sectionIds) {
       const oldSection = oldScope ? extractSectionByIdentifier(oldScope, secId) : null;
-      const newSection = extractSectionByIdentifier(newScope, secId);
+      const newSection = finalNewScope ? extractSectionByIdentifier(finalNewScope, secId) : null;
 
       if (!oldSection && !newSection) {
         diffs.push({ section: secId, status: "not_found", hunks: [] });
@@ -408,6 +483,7 @@ router.get("/:titleNumber/content", async (req, res) => {
     }
 
     const html = xmlToHtml(xml);
+    const regulatoryMeta = extractRegulatoryMeta(xml);
 
     const labelParts = [`Title ${titleNumber}: ${title.name}`];
     if (chapter) labelParts.push(`Chapter ${chapter}`);
@@ -422,6 +498,7 @@ router.get("/:titleNumber/content", async (req, res) => {
       content_html: html,
       part,
       word_count_estimate: html.split(/\s+/).length,
+      regulatory_meta: regulatoryMeta,
     });
   } catch (err) {
     console.error("Error fetching regulation content:", err);

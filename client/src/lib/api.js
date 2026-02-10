@@ -38,6 +38,10 @@ export const api = {
     const qs = buildQs(params);
     return request(`/regulation/${titleNumber}/diff${qs ? "?" + qs : ""}`);
   },
+  getRegulationRevisionCounts: (titleNumber, params = {}) => {
+    const qs = buildQs(params);
+    return request(`/regulation/${titleNumber}/revision-counts${qs ? "?" + qs : ""}`);
+  },
   getIngestStatus: () => request("/ingest/status"),
   triggerQuickIngest: () => post("/ingest/quick"),
   triggerFullIngest: () => post("/ingest/full"),
