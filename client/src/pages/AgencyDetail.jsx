@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -13,6 +13,8 @@ import {
   Loader2,
   BookOpen,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Copy,
   Check,
   ExternalLink,
@@ -86,7 +88,34 @@ function buildRegulationUrl(c, agencySlug) {
   return `/regulation/${c.title_number}${qs ? "?" + qs : ""}`;
 }
 
+function SortHeader({ label, sortKey, currentSort, onSort, align = "left" }) {
+  const isActive = currentSort.key === sortKey;
+  const icon = isActive ? (
+    currentSort.dir === "asc" ? (
+      <ChevronUp className="h-3 w-3" />
+    ) : (
+      <ChevronDown className="h-3 w-3" />
+    )
+  ) : (
+    <ChevronDown className="h-3 w-3 opacity-0 group-hover:opacity-40" />
+  );
+
+  return (
+    <th className={cn("pb-3 pr-4 font-semibold", align === "right" && "text-right")}>
+      <button
+        onClick={() => onSort(sortKey)}
+        className="group inline-flex items-center gap-1 hover:text-foreground transition-colors"
+      >
+        {label}
+        {icon}
+      </button>
+    </th>
+  );
+}
+
 function CfrContentTable({ content, agencySlug }) {
+  const [sort, setSort] = useState({ key: "title", dir: "asc" });
+
   if (!content || content.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
@@ -95,21 +124,50 @@ function CfrContentTable({ content, agencySlug }) {
     );
   }
 
+  function handleSort(key) {
+    setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  function chapterSortValue(c) {
+    if (c.chapter) return c.chapter;
+    if (c.subtitle) return `S${c.subtitle}`;
+    return "";
+  }
+
+  const sorted = [...content].sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    switch (sort.key) {
+      case "title":
+        return (a.title_number - b.title_number) * dir;
+      case "chapter":
+        return chapterSortValue(a).localeCompare(chapterSortValue(b)) * dir;
+      case "words":
+        return ((a.word_count || 0) - (b.word_count || 0)) * dir;
+      case "sections":
+        return ((a.section_count || 0) - (b.section_count || 0)) * dir;
+      case "revisions":
+        return ((a.revision_count || 0) - (b.revision_count || 0)) * dir;
+      default:
+        return 0;
+    }
+  });
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-left">
-            <th className="pb-3 pr-4 font-semibold">Title</th>
-            <th className="pb-3 pr-4 font-semibold">Chapter/Subtitle</th>
-            <th className="pb-3 pr-4 font-semibold text-right">Word Count</th>
-            <th className="pb-3 pr-4 font-semibold text-right">Sections</th>
+            <SortHeader label="Title" sortKey="title" currentSort={sort} onSort={handleSort} />
+            <SortHeader label="Chapter/Subtitle" sortKey="chapter" currentSort={sort} onSort={handleSort} />
+            <SortHeader label="Word Count" sortKey="words" currentSort={sort} onSort={handleSort} align="right" />
+            <SortHeader label="Sections" sortKey="sections" currentSort={sort} onSort={handleSort} align="right" />
+            <SortHeader label="Revisions" sortKey="revisions" currentSort={sort} onSort={handleSort} align="right" />
             <th className="pb-3 pr-4 font-semibold">Checksum</th>
             <th className="pb-3 font-semibold"></th>
           </tr>
         </thead>
         <tbody>
-          {content.map((c) => {
+          {sorted.map((c) => {
             const regUrl = buildRegulationUrl(c, agencySlug);
             return (
               <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
@@ -128,6 +186,20 @@ function CfrContentTable({ content, agencySlug }) {
                 </td>
                 <td className="py-3 pr-4 text-right tabular-nums font-medium">{formatNumber(c.word_count)}</td>
                 <td className="py-3 pr-4 text-right tabular-nums">{c.section_count || "—"}</td>
+                <td className="py-3 pr-4 text-right tabular-nums">
+                  {c.revision_count != null ? (
+                    c.revision_count > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        {c.revision_count.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">0</span>
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="py-3 pr-4 max-w-[200px]">
                   {c.checksum ? (
                     <CopyableChecksum value={c.checksum} />

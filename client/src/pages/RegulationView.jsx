@@ -276,10 +276,11 @@ function VersionHistory({ titleNumber, chapter, part }) {
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground mb-3">
-        {data.total_versions.toLocaleString()} total revisions across {data.grouped_count.toLocaleString()} dates. Click
-        a revision to view the diff.
+        {data.total_versions.toLocaleString()} section{data.total_versions !== 1 ? "s" : ""} amended across{" "}
+        {data.grouped_count.toLocaleString()} date{data.grouped_count !== 1 ? "s" : ""}. Click a revision to view the
+        diff.
       </p>
-      <div className="max-h-[600px] overflow-y-auto space-y-0.5">
+      <div className="space-y-0.5">
         {data.versions.map((v) => {
           const isExpanded = expandedDate === v.date;
           return (
@@ -411,6 +412,15 @@ export default function RegulationView() {
 
   const [activeTab, setActiveTab] = useState("content");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const { data: versionsData } = useQuery({
+    queryKey: ["versions", titleNumber, chapter, part],
+    queryFn: () => api.getRegulationVersions(titleNumber, { chapter, part }),
+    enabled: !!part,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const revisionCount = versionsData?.grouped_count || 0;
 
   const { data: structureData, isLoading: structureLoading } = useQuery({
     queryKey: ["regulation-structure", titleNumber, chapter, subtitle],
@@ -567,12 +577,34 @@ export default function RegulationView() {
             >
               <Clock className="h-3.5 w-3.5 inline mr-1.5" />
               Revisions
+              {(versionsData?.total_versions || 0) > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary px-1.5 py-0 text-[10px] font-semibold min-w-[1.25rem] tabular-nums">
+                  {versionsData.total_versions}
+                </span>
+              )}
             </button>
           </div>
 
           <div className="rounded-xl border bg-card shadow-sm p-6">
             {activeTab === "content" && (
               <>
+                {revisionCount > 0 && (
+                  <button
+                    onClick={() => setActiveTab("versions")}
+                    className="mb-4 w-full flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm text-left hover:bg-primary/10 transition-colors"
+                  >
+                    <Clock className="h-4 w-4 text-primary shrink-0" />
+                    <span>
+                      <span className="font-medium text-foreground">
+                        {versionsData?.total_versions || 0} section
+                        {(versionsData?.total_versions || 0) !== 1 ? "s" : ""} amended across {revisionCount} date
+                        {revisionCount !== 1 ? "s" : ""}
+                      </span>
+                      <span className="text-muted-foreground"> — </span>
+                      <span className="text-primary font-medium">view changes</span>
+                    </span>
+                  </button>
+                )}
                 <PartContent
                   titleNumber={titleNumber}
                   chapter={chapter}
