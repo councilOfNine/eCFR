@@ -202,21 +202,21 @@ export function ecfrDatedSectionUrl(issueDate: string, title: number, section: s
 }
 
 /** Source repository. Appears in the OpenAPI `externalDocs` and the default User-Agent. */
-export const REPO_URL = 'https://github.com/ecfr-atlas/ecfr-atlas';
+export const REPO_URL = 'https://github.com/councilOfNine/eCFR';
 
 /**
  * Operator contact, as embedded in the default User-Agent below. A real deployment overrides
  * the whole User-Agent string via the `ECFR_USER_AGENT` var rather than this address alone —
  * eCFR wants one descriptive string, not components.
  */
-export const CONTACT_EMAIL_PLACEHOLDER = 'ops@ecfr-atlas.org';
+export const CONTACT_URL = 'https://github.com/councilOfNine/eCFR/issues';
 
 /**
  * eCFR asks for a descriptive User-Agent with a contact URL, and rate-limits harder without
  * one. `ECFR_USER_AGENT` (plain var) is the per-deployment value; this fallback keeps a
  * deployment that forgot the var polite upstream instead of anonymous.
  */
-export const DEFAULT_ECFR_USER_AGENT = `ecfr-atlas/0.1 (+${REPO_URL}; contact: ${CONTACT_EMAIL_PLACEHOLDER})`;
+export const DEFAULT_ECFR_USER_AGENT = `ecfr-atlas/0.1 (+${CONTACT_URL})`;
 
 export function ecfrUserAgent(configured: string | undefined): string {
   return configured || DEFAULT_ECFR_USER_AGENT;

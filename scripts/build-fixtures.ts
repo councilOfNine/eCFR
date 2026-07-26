@@ -79,8 +79,7 @@ const sql = await import('./sync/lib/sql.js');
 // ─── configuration ───────────────────────────────────────────────────────────
 
 const ECFR_BASE = 'https://www.ecfr.gov';
-const USER_AGENT =
-  'ecfr-atlas-fixtures/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)';
+const USER_AGENT = 'ecfr-atlas-fixtures/0.1 (+https://github.com/councilOfNine/eCFR)';
 
 /**
  * Milliseconds between requests. 8 req/s is the measured clean ceiling; 150 ms is 6.7 req/s

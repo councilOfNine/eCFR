@@ -43,4 +43,12 @@ coverage/
 
 # fixture build scratch — raw eCFR responses, up to ~40 MB per title.
 # The reviewable output (seed.sql, content/, xml/, manifest.json) IS committed.
-fixtures/raw/
+# Excluding the directory itself would stop git descending into it, and a negation cannot
+# re-include a file whose parent directory is excluded. Ignore the CONTENTS instead.
+fixtures/raw/*
+# ...except the small captures that TESTS read. Keeping these untracked made
+# scripts/sync/lib/structure.test.ts pass locally (where a fixture build left the directory
+# behind) and fail on every fresh clone, including CI. Committed because a test's inputs are
+# part of the test. The exclusions above still cover title-12.xml (37M) and structure-12.json
+# (2.3M), which are build scratch and are not read by anything under test.
+!fixtures/raw/structure-3.json

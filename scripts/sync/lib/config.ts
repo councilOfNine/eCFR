@@ -133,7 +133,7 @@ export function loadConfig(argv: readonly string[] = process.argv.slice(2)): Syn
     snapshotDir: resolvePath(repoRoot, env('ECFR_SNAPSHOT_DIR') ?? '.sync-cache/snapshot'),
     userAgent:
       env('ECFR_USER_AGENT') ??
-      'ecfr-atlas/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; nightly corpus sync)',
+      'ecfr-atlas/0.1 (+https://github.com/councilOfNine/eCFR; nightly corpus sync)',
     maxRps: parseRate(env('ECFR_MAX_RPS'), DEFAULT_MAX_RPS),
     r2: readR2Config(),
     dryRun: flags.has('--dry-run') || env('SYNC_DRY_RUN') === '1',

@@ -22,7 +22,7 @@
       // Replace after `wrangler d1 create ecfr-atlas`. Left as the nil UUID rather than a
       // real-looking value so a forgotten substitution fails loudly instead of writing to
       // somebody else's database.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "18b380db-1366-4630-8329-62233abf2b69",
       // Migrations are owned by packages/db, not by this app. Root `pnpm db:migrate:*`
       // deliberately points wrangler here, so this path is what actually gets applied.
       "migrations_dir": "../../packages/db/migrations"
@@ -93,7 +93,7 @@
     "PUBLIC_CONTENT_BASE_URL": "",
     // eCFR asks for a descriptive User-Agent with a contact URL, and rate-limits harder
     // without one. Only /v1/diff ever sends it.
-    "ECFR_USER_AGENT": "ecfr-atlas/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)",
+    "ECFR_USER_AGENT": "ecfr-atlas/0.1 (+https://github.com/councilOfNine/eCFR)",
     "DOCS_URL": "https://api.ecfr-atlas.org/docs"
   },
 
@@ -138,7 +138,7 @@
         "ENVIRONMENT": "staging",
         "SITE_ORIGIN": "https://staging.ecfr-atlas.org",
         "PUBLIC_CONTENT_BASE_URL": "",
-        "ECFR_USER_AGENT": "ecfr-atlas-staging/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)",
+        "ECFR_USER_AGENT": "ecfr-atlas-staging/0.1 (+https://github.com/councilOfNine/eCFR)",
         "DOCS_URL": "https://staging-api.ecfr-atlas.org/docs"
       }
     }

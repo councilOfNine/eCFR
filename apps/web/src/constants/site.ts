@@ -25,7 +25,7 @@ export const SITE = {
   /** Public origin of the API Worker (apps/api), linked from /api. Never fetched at runtime. */
   apiOrigin: env.PUBLIC_API_ORIGIN ?? 'https://api.ecfr-atlas.org',
   /** Where the source lives, for attribution and contributing links. */
-  repoUrl: env.PUBLIC_REPO_URL ?? 'https://github.com/itsmiketorres/USDS',
+  repoUrl: env.PUBLIC_REPO_URL ?? 'https://github.com/councilOfNine/eCFR',
   /** Contact for the deployment operator. Null renders no contact affordance. */
   contactEmail: env.PUBLIC_CONTACT_EMAIL ?? null,
   /**

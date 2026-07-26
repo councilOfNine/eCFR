@@ -1,5 +1,5 @@
 # TODO(maintainer): GitHub requires absolute URLs in contact_links, so the two github.com links
-# below hard-code an owner/repo placeholder. Replace `ecfr-atlas/ecfr-atlas` with the real slug —
+# below hard-code an owner/repo placeholder. Replace `councilOfNine/eCFR` with the real slug —
 # a broken security link is worse than no link, because a reporter who hits a 404 gives up or
 # files publicly.
 blank_issues_enabled: true
@@ -10,10 +10,10 @@ contact_links:
       This project is not an official edition of the CFR. For the authoritative text of a
       regulation, or anything with legal consequences, use the eCFR itself.
   - name: Security vulnerability
-    url: https://github.com/ecfr-atlas/ecfr-atlas/security/advisories/new
+    url: https://github.com/councilOfNine/eCFR/security/advisories/new
     about: Report privately. Please do not open a public issue for a security problem.
   - name: Methodology — how the numbers are produced
-    url: https://github.com/ecfr-atlas/ecfr-atlas/blob/HEAD/docs/ARCHITECTURE.md
+    url: https://github.com/councilOfNine/eCFR/blob/HEAD/docs/ARCHITECTURE.md
     about: >-
       What is counted, what is excluded, and what "unavailable" means before you file a
       data-error report.

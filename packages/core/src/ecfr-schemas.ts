@@ -168,7 +168,10 @@ export type ContentVersion = z.infer<typeof ContentVersion>;
 
 /**
  * eCFR serialises every numeric field in /versions `meta` as a STRING — `"total_pages": "19"`,
- * not `19`. Verified live and against the committed capture in fixtures/raw/versions-12.json.
+ * not `19`. Re-verify with:
+ *   curl -s 'https://www.ecfr.gov/api/versioner/v1/versions/title-12.json' | jq .meta
+ * Title 12 spans 19 pages so it carries the pagination fields; title 1 (421 rows) omits them
+ * entirely, which is why they are optional as well as coerced.
  * Declaring these as `z.number()` fails validation on any title with more than one page of
  * versions, which is every large title. Coerce rather than widen the type, so callers get a
  * real number and the string-ness stays contained here.

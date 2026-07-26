@@ -72,7 +72,7 @@ export const ECFR_BASE_URL = 'https://www.ecfr.gov';
  * A fork or a separate deployment should still override it: the point of the header is to reach
  * whoever is actually making the requests, and that is not us.
  */
-const DEFAULT_ECFR_CONTACT_URL = 'https://github.com/ecfr-atlas/ecfr-atlas';
+const DEFAULT_ECFR_CONTACT_URL = 'https://github.com/councilOfNine/eCFR';
 
 /**
  * Reads and validates `ECFR_CONTACT_URL`.

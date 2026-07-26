@@ -43,7 +43,7 @@ const BASE = 'https://www.ecfr.gov';
  */
 const USER_AGENT =
   'ecfr-atlas-contract-test/0.1 ' +
-  `(+https://github.com/${process.env.GITHUB_REPOSITORY ?? 'ecfr-atlas/ecfr-atlas'})`;
+  `(+https://github.com/${process.env.GITHUB_REPOSITORY ?? 'councilOfNine/eCFR'})`;
 
 /** Statuses that mean "upstream is busy", never "upstream changed". */
 const TRANSIENT_STATUS: ReadonlySet<number> = new Set([408, 425, 429, 500, 502, 503, 504]);
