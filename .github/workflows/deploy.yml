@@ -1,0 +1,210 @@
+name: Deploy
+
+# Publishes CODE changes. The nightly sync (sync.yml) publishes DATA changes and redeploys the
+# site as its last step, so before this file existed a fix to a page or an API route sat
+# unpublished until the next weekday sync happened to run — and an API-only change was never
+# deployed by anything at all, because sync.yml only deploys apps/web.
+#
+# The split is deliberate:
+#   sync.yml    data changed -> rebuild the site against the new snapshot -> deploy web
+#   deploy.yml  code changed -> deploy the affected Worker(s) now
+#
+# Both are safe to run concurrently against different Workers, but two `wrangler deploy` calls
+# against the SAME Worker can race, so the site job takes the same concurrency group sync.yml
+# uses. The API has no such conflict — nothing else deploys it.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'What to deploy'
+        type: choice
+        options: [both, api, web]
+        default: both
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  # Never deploy something that does not build. This duplicates ci.yml's gates on purpose:
+  # ci.yml runs on pull_request, and a direct push to master (or a merge commit) would
+  # otherwise reach production without any of them.
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint:ci
+      - run: pnpm typecheck
+      - run: pnpm --filter @ecfr-atlas/web typecheck
+      - run: pnpm test
+
+  api:
+    name: deploy api
+    needs: verify
+    if: ${{ github.event_name == 'push' || inputs.target == 'both' || inputs.target == 'api' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The /docs page serves Scalar from our own origin rather than a CDN, so the bundle has
+      # to be copied out of node_modules before the Worker is uploaded. Deploying without this
+      # yields a docs page that 404s its own script.
+      - name: Vendor the API reference bundle
+        run: pnpm --filter @ecfr-atlas/api vendor:scalar
+
+      # Catches a bad binding or an oversized bundle before anything is published. The dry run
+      # resolves every binding in wrangler.jsonc against the account.
+      - name: Dry run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --dry-run --config apps/api/wrangler.jsonc
+
+      # Migrations run BEFORE the Worker that depends on them. A new column read by new code
+      # must exist first; the reverse order is a window of 500s. Migrations here must therefore
+      # stay additive — see docs/DEPLOYMENT.md.
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler d1 migrations apply ecfr-atlas \
+            --remote --config apps/api/wrangler.jsonc
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler deploy \
+            --config apps/api/wrangler.jsonc \
+            --message "deploy ${{ github.sha }}"
+
+      # A deploy that returns 200 on /v1/meta has working D1, working bindings and a live
+      # publish pointer. Anything less and the next step is a rollback, not a green check.
+      - name: Smoke test
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: |
+          if [ -z "$API_ORIGIN" ]; then
+            echo "::warning title=No smoke test::Set the API_ORIGIN repository variable to enable it."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/meta.json -w '%{http_code}' "$API_ORIGIN/v1/meta")
+          echo "GET $API_ORIGIN/v1/meta -> $code"
+          cat /tmp/meta.json
+          test "$code" = "200"
+
+  web:
+    name: deploy web
+    needs: verify
+    if: ${{ github.event_name == 'push' || inputs.target == 'both' || inputs.target == 'web' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Shared with sync.yml: both deploy ecfr-atlas-web, and two uploads of the same Worker can
+    # interleave. Waiting is correct — a sync in flight is about to publish a newer site anyway.
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # THE IMPORTANT DECISION IN THIS FILE.
+      #
+      # A code-only deploy has no fresh snapshot, and apps/web/src/data/load.ts falls back to
+      # the committed FIXTURE when none is present — which would publish invented sample numbers
+      # to production under a real domain. That is precisely the failure this whole project
+      # exists to prevent, so the fixture fallback must never reach production.
+      #
+      # The snapshot is pulled from R2, where the last successful sync left it. If it is not
+      # there, this job fails loudly rather than building something plausible.
+      - name: Fetch the published snapshot from R2
+        id: snapshot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          mkdir -p sync-output/snapshot
+          if pnpm exec wrangler r2 object get \
+               "ecfr-atlas-content/snapshot/latest.tar.gz" \
+               --file /tmp/snapshot.tar.gz --remote 2>/tmp/r2.err; then
+            tar -xzf /tmp/snapshot.tar.gz -C sync-output/snapshot
+            echo "have_snapshot=true" >> "$GITHUB_OUTPUT"
+            echo "Snapshot restored: $(find sync-output/snapshot -type f | wc -l) files"
+          else
+            echo "have_snapshot=false" >> "$GITHUB_OUTPUT"
+            cat /tmp/r2.err || true
+          fi
+
+      - name: Refuse to publish fixture data
+        if: steps.snapshot.outputs.have_snapshot != 'true'
+        run: |
+          {
+            echo "## Deploy stopped"
+            echo
+            echo "No published snapshot was found at \`ecfr-atlas-content/snapshot/latest.tar.gz\`."
+            echo "Building now would fall back to the committed fixture and publish **invented**"
+            echo "sample numbers to production."
+            echo
+            echo "Run the backfill (\`pnpm sync:backfill\`) or the **Nightly sync** workflow first."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=No snapshot::Refusing to build against the fixture. Run a sync first."
+          exit 1
+
+      - name: Build
+        env:
+          ECFR_SNAPSHOT_DIR: sync-output/snapshot
+        run: pnpm build
+
+      - name: Assert static-asset budget
+        run: node scripts/ci/check-asset-count.ts apps/web/dist/client
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler deploy \
+            --config apps/web/wrangler.jsonc \
+            --message "deploy ${{ github.sha }}"

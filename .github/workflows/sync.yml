@@ -240,6 +240,34 @@ jobs:
             exit 1
           fi
 
+      # Publish the snapshot so a CODE deploy can rebuild the site without a sync.
+      #
+      # Before this step the snapshot existed only inside this job, which meant deploy.yml had
+      # nothing to build against and a fix to a page could not be published until the next
+      # weekday sync. Storing it also gives a rollback artifact: the exact input that produced
+      # the currently-live site.
+      #
+      # Written BEFORE the build, so it lands even if the build or the asset budget later fails
+      # — the snapshot is valid data regardless of whether the site compiled.
+      - name: Publish the snapshot to R2
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          tar -czf /tmp/snapshot.tar.gz -C "$SYNC_OUT_DIR/snapshot" .
+          echo "snapshot tarball: $(du -h /tmp/snapshot.tar.gz | cut -f1)"
+          # Dated copy first, then the pointer. If the second upload fails, `latest` still
+          # names a snapshot that really exists rather than a half-written object.
+          stamp="$(date -u +%Y-%m-%d)"
+          pnpm exec wrangler r2 object put \
+            "ecfr-atlas-content/snapshot/$stamp.tar.gz" \
+            --file /tmp/snapshot.tar.gz --content-type application/gzip --remote
+          pnpm exec wrangler r2 object put \
+            "ecfr-atlas-content/snapshot/latest.tar.gz" \
+            --file /tmp/snapshot.tar.gz --content-type application/gzip --remote
+
       - name: Build site
         if: ${{ !inputs.dry_run }}
         env:
