@@ -1,0 +1,154 @@
+---
+/**
+ * Chapter table of contents. 473 of these.
+ *
+ * Parts are grouped by subchapter because that is how the CFR is organised and how a researcher
+ * navigates it. A chapter with no subchapters renders one ungrouped list rather than an invented
+ * "General" heading.
+ */
+import type { GetStaticPaths } from 'astro';
+import Breadcrumbs from '../../../../components/Breadcrumbs.astro';
+import CopyCitation from '../../../../components/CopyCitation.astro';
+import PageHeader from '../../../../components/PageHeader.astro';
+import WordCountView from '../../../../components/WordCount.astro';
+import { STRINGS } from '../../../../constants/strings';
+import { formatInt } from '../../../../data/format';
+import { atlas } from '../../../../data/load';
+import * as route from '../../../../data/routes';
+import Base from '../../../../layouts/Base.astro';
+
+export const getStaticPaths = (async () => {
+  const { chapters } = await (await atlas()).routes();
+  return chapters.map(({ title, chapter }) => ({
+    params: { number: String(title), id: chapter },
+  }));
+}) satisfies GetStaticPaths;
+
+const data = await atlas();
+const titleNumber = Number.parseInt(Astro.params.number ?? '', 10);
+const chapterId = Astro.params.id ?? '';
+const chapter = Number.isNaN(titleNumber) ? null : await data.getChapter(titleNumber, chapterId);
+
+if (!chapter) {
+  throw new Error(
+    `build: /title/${titleNumber}/chapter/${chapterId} was routed but getChapter() returned null.`,
+  );
+}
+
+const totalParts = chapter.groups.reduce((sum, group) => sum + group.part_list.length, 0);
+---
+
+<Base
+  title={STRINGS.chapterPage.title(chapter.display, chapter.label)}
+  description={STRINGS.chapterPage.description(chapter.display, chapter.label)}
+  section="titles"
+>
+  <Breadcrumbs
+    crumbs={[
+      { label: STRINGS.chapterPage.breadcrumbRoot, href: route.titleIndex() },
+      {
+        label: STRINGS.chapterPage.breadcrumbTitle(chapter.title_number),
+        href: route.title(chapter.title_number),
+      },
+      { label: STRINGS.chapterPage.breadcrumbChapter(chapter.identifier) },
+    ]}
+  />
+
+  <PageHeader eyebrow={chapter.display} title={chapter.label}>
+    <div slot="aside" class="text-right">
+      <WordCountView value={chapter.word_count} variant="lg" unit={STRINGS.common.wordsUnit} />
+      <p class="mt-1 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.chapterPage.partCount(formatInt(totalParts))}
+      </p>
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <CopyCitation
+        citation={chapter.display}
+        ecfrUrl={chapter.ecfr_url}
+        sourceDate={data.manifest.source_date}
+      />
+      <a href={chapter.ecfr_url} rel="external noopener" class="text-xs">
+        {STRINGS.common.officialTextLink}
+      </a>
+    </div>
+  </PageHeader>
+
+  {
+    chapter.agencies.length > 0 && (
+      <section class="mb-8" aria-labelledby="chapter-agencies">
+        <h2 id="chapter-agencies" class="eyebrow mb-2">
+          {STRINGS.chapterPage.agenciesHeading}
+        </h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {chapter.agencies.map((agency) => (
+            <li>
+              <a href={route.agency(agency.slug)} class="badge badge-accent no-underline">
+                {agency.display_name}
+              </a>
+            </li>
+          ))}
+        </ul>
+        {chapter.agencies.length > 1 && (
+          <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+            More than one agency appears here. That can mean joint administration of the whole
+            chapter, or separate agencies administering different parts within it — the
+            <a href={route.sharedJurisdiction()}> shared jurisdiction</a> page distinguishes the two.
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  <section aria-labelledby="parts-heading">
+    <h2 id="parts-heading" class="mb-3 text-lg font-semibold">{STRINGS.chapterPage.partsHeading}</h2>
+
+    {
+      totalParts === 0 ? (
+        <p class="text-sm text-[color:var(--color-ink-muted)]">{STRINGS.chapterPage.noParts}</p>
+      ) : (
+        <div class="space-y-8">
+          {chapter.groups.map((group) => (
+            <div>
+              {group.identifier !== null && (
+                <h3 class="mb-2 border-b border-[color:var(--color-border)] pb-1 text-sm font-semibold text-[color:var(--color-ink-muted)]">
+                  {STRINGS.chapterPage.subchapterHeading(group.identifier)}
+                  {group.label && STRINGS.chapterPage.subchapterLabel(group.label)}
+                </h3>
+              )}
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="num">{STRINGS.chapterPage.columns.part}</th>
+                      <th scope="col">{STRINGS.chapterPage.columns.heading}</th>
+                      <th scope="col" class="num">{STRINGS.chapterPage.columns.sections}</th>
+                      <th scope="col" class="num">{STRINGS.chapterPage.columns.words}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.part_list.map((part) => (
+                      <tr>
+                        <td class="num font-mono text-xs">
+                          <a href={route.part(chapter.title_number, part.identifier)}>
+                            {part.identifier}
+                          </a>
+                        </td>
+                        <th scope="row" class="font-normal">
+                          <a href={route.part(chapter.title_number, part.identifier)}>
+                            {part.reserved ? STRINGS.common.reservedHeading : part.label}
+                          </a>
+                        </th>
+                        <td class="num">{formatInt(part.sections)}</td>
+                        <td class="num"><WordCountView value={part.word_count} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+  </section>
+</Base>

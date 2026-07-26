@@ -1,0 +1,69 @@
+---
+/**
+ * Horizontal bars, in HTML and CSS, with no script and no measurement pass.
+ *
+ * Deliberately not a charting library and not an SVG: the widths are percentages of a value
+ * computed at build time, so the bars are laid out by the same pass that lays out the text.
+ * Nothing reflows after paint, which is how the CLS budget stays at zero — the predecessor's
+ * measured 0.112 came from content arriving after the first paint.
+ *
+ * A row whose value is unknown renders a hatched full-width track rather than an empty one.
+ * An empty bar reads as "nearly zero", which is the specific lie this project is about.
+ */
+import { STRINGS } from '../constants/strings';
+import { formatWords, isKnown, unknownReason } from '../data/format';
+import type { BarRow } from './types';
+import WordCountView from './WordCount.astro';
+
+interface Props {
+  rows: BarRow[];
+  caption: string;
+}
+
+const { rows, caption } = Astro.props;
+
+// Scale to the largest KNOWN value. An unknown cannot participate in a maximum.
+const max = Math.max(1, ...rows.filter((r) => isKnown(r.value)).map((r) => r.value.words ?? 0));
+---
+
+<figure class="card">
+  <figcaption class="eyebrow mb-3">{caption}</figcaption>
+  <ul class="list-none">
+    {
+      rows.map((row) => {
+        const known = isKnown(row.value);
+        const pct = known ? Math.max(0.5, ((row.value.words ?? 0) / max) * 100) : 100;
+        const reason = unknownReason(row.value);
+        return (
+          <li class="bar-row">
+            <span class="truncate" title={row.label}>
+              {row.href ? <a href={row.href}>{row.label}</a> : row.label}
+              {row.note && (
+                <span class="badge badge-shared ml-1.5 align-middle">{row.note}</span>
+              )}
+            </span>
+            {/*
+              role="img" with an aria-label carrying the real figure: the bar itself is decorative
+              once the number is announced, and a screen reader should not have to infer a length.
+            */}
+            <span
+              class="bar-track"
+              role="img"
+              aria-label={
+                known
+                  ? STRINGS.barChart.barLabelKnown(row.label, formatWords(row.value))
+                  : STRINGS.barChart.barLabelUnknown(row.label, reason ?? '')
+              }
+            >
+              <span
+                class:list={['bar-fill', !known && 'bar-fill-unknown']}
+                style={`width:${pct.toFixed(2)}%`}
+              />
+            </span>
+            <WordCountView value={row.value} variant="compact" class="text-xs" />
+          </li>
+        );
+      })
+    }
+  </ul>
+</figure>

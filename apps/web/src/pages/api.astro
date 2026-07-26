@@ -1,0 +1,185 @@
+---
+import Callout from '../components/Callout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import generated from '../data/generated/api-endpoints.json';
+import * as route from '../data/routes';
+/**
+ * Human landing page for the public API. The machine-readable surface — the OpenAPI document and
+ * the interactive docs — lives in apps/api, a separately deployed Worker.
+ *
+ * This page links; it never calls. Nothing here fetches at request time, from our API or from
+ * ecfr.gov.
+ */
+import Base from '../layouts/Base.astro';
+
+/** Read through SITE so the origin and its `PUBLIC_API_ORIGIN` default are stated once. */
+const apiOrigin = SITE.apiOrigin;
+
+/**
+ * The endpoint table is GENERATED, not typed here.
+ *
+ * `src/data/generated/api-endpoints.json` is rebuilt from apps/api/src/routes/*.ts by
+ * scripts/gen-api-endpoints.ts on every build, before Astro runs. The hand-maintained version
+ * of this list drifted into advertising `GET /v1/structure/{title}` — a path that has never
+ * existed — while omitting /v1/parts, /v1/search, /v1/word-counts and the real structure route.
+ * On a site whose whole argument is that its published figures are checkable, a docs page
+ * listing endpoints a reader cannot call is a credibility failure, not a typo.
+ *
+ * The generator reads the source with the TypeScript AST and never imports or evaluates apps/api,
+ * so the site build has no runtime dependency on the API Worker.
+ */
+interface Endpoint {
+  method: string;
+  path: string;
+  summary: string;
+  group: string;
+}
+
+const endpoints: Endpoint[] = generated.endpoints;
+
+/** Preserve the generator's stable sort while grouping by OpenAPI tag. */
+const groups: { name: string; endpoints: Endpoint[] }[] = [];
+for (const endpoint of endpoints) {
+  const existing = groups.find((g) => g.name === endpoint.group);
+  if (existing) existing.endpoints.push(endpoint);
+  else groups.push({ name: endpoint.group, endpoints: [endpoint] });
+}
+
+/** Account management last: it is machinery for getting a key, not part of the data surface. */
+groups.sort((a, b) => Number(a.name === 'Account') - Number(b.name === 'Account'));
+---
+
+<Base
+  title={STRINGS.apiPage.title}
+  description={STRINGS.apiPage.description}
+  section="about"
+>
+  <PageHeader
+    eyebrow={STRINGS.apiPage.eyebrow}
+    title={STRINGS.apiPage.heading}
+    standfirst={STRINGS.apiPage.standfirst}
+  />
+
+  <div class="prose-page">
+    <p>
+      <a href={`${apiOrigin}/docs`} rel="external noopener" class="badge badge-accent no-underline">
+        {STRINGS.apiPage.docsLink}
+      </a>
+      <a
+        href={`${apiOrigin}/openapi.json`}
+        rel="external noopener"
+        class="badge badge-neutral ml-2 no-underline"
+      >
+        {STRINGS.apiPage.openapiLink}
+      </a>
+    </p>
+
+    <Callout tone="unknown" class="mt-6" title={STRINGS.apiPage.envelopeCalloutTitle}>
+      <p>
+        A word count never appears in a response as a bare number. It is always an object:
+      </p>
+      <pre
+        class="mt-2 overflow-x-auto rounded border border-[color:var(--color-border)] bg-[color:var(--color-sunken)] p-3 font-mono text-xs"><code>{`{
+  "words": 104642,
+  "status": "rolled_up",
+  "reason": null,
+  "method": "descendant_sum"
+}`}</code></pre>
+      <p class="mt-2">
+        When <code>words</code> is <code>null</code> the value was <strong>not measured</strong>.
+        It is not zero. <code>status</code> and <code>reason</code> say why. Filter on
+        <code>status</code> before any arithmetic — writing
+        <code>total += row.words</code> is exactly the mistake this project was rebuilt to stop
+        making, and the envelope exists so the API cannot help you make it.
+      </p>
+    </Callout>
+
+    <h2>{STRINGS.apiPage.endpointsHeading}</h2>
+    <p>{STRINGS.apiPage.endpointsIntro(endpoints.length)}</p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">{STRINGS.apiPage.columns.method}</th>
+            <th scope="col">{STRINGS.apiPage.columns.path}</th>
+            <th scope="col">{STRINGS.apiPage.columns.returns}</th>
+          </tr>
+        </thead>
+        {
+          groups.map((group) => (
+            <tbody>
+              <tr>
+                <th scope="colgroup" colspan="3" class="eyebrow pt-4">
+                  {group.name}
+                </th>
+              </tr>
+              {group.endpoints.map((endpoint) => (
+                <tr>
+                  <td>
+                    <span class="badge badge-neutral font-mono">{endpoint.method}</span>
+                  </td>
+                  <th scope="row" class="whitespace-nowrap font-mono text-xs font-normal">
+                    {endpoint.path}
+                  </th>
+                  <td>{endpoint.summary}</td>
+                </tr>
+              ))}
+            </tbody>
+          ))
+        }
+      </table>
+    </div>
+    <p class="text-xs">
+      Paths are shown as mounted; every one is relative to <code>{apiOrigin}</code>. Parameters,
+      response schemas and error shapes are in the OpenAPI document, which is the contract and is
+      generated from the same schemas the responses are validated against. Outside
+      <code>/v1</code> the Worker also serves <code>GET /openapi.json</code>,
+      <code>GET /docs</code> and <code>GET /health</code>.
+    </p>
+
+    <h2>{STRINGS.apiPage.rateLimitsHeading}</h2>
+    <ul>
+      <li>
+        <strong>Anonymous.</strong> No key, low daily ceiling, per-IP. Enough to read the docs and
+        try every endpoint; not enough to mirror the corpus.
+      </li>
+      <li>
+        <strong>Registered.</strong> A free key, issued after email verification, with a much
+        higher daily quota. Send the key as
+        <code>Authorization: Bearer &lt;key&gt;</code>.
+      </li>
+      <li>
+        <strong>Elevated.</strong> For research or public-interest projects that need bulk access.
+        Ask, and say what you are building.
+      </li>
+    </ul>
+    <p>
+      Quota state comes back on every authenticated response, and a 429 tells you when the window
+      resets rather than leaving you to guess.
+    </p>
+
+    <h2>{STRINGS.apiPage.termsHeading}</h2>
+    <ul>
+      <li>
+        The data is public-domain federal material; this project's measurements and code are open
+        source. Attribution is appreciated and, for the derived counts, expected — cite them as
+        eCFR Atlas measurements, not as government figures.
+      </li>
+      <li>
+        Do not use this API as a proxy for eCFR. If you need the corpus, fetch it from
+        <a href={SITE.ecfrHomeUrl} rel="external noopener"> ecfr.gov</a> directly and be a good
+        citizen about it: sustained request rates above roughly 8 per second get throttled.
+      </li>
+      <li>
+        Keys are per-project, not per-person. Do not embed one in a public client.
+      </li>
+    </ul>
+
+    <p class="mt-8">
+      Read <a href={route.methodology()}>methodology</a> for what the numbers mean, and
+      <a href={route.dataQuality()}> data quality</a> for what is missing from them.
+    </p>
+  </div>
+</Base>

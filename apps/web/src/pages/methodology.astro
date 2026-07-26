@@ -1,0 +1,274 @@
+---
+import { UNKNOWN_STATUSES } from '@ecfr-atlas/core';
+import Callout from '../components/Callout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { STRINGS } from '../constants/strings';
+import { statusExplanation, statusLabel } from '../data/format';
+import * as route from '../data/routes';
+/**
+ * Methodology.
+ *
+ * This page is the credibility mechanism. A derived measurement that does not publish its
+ * definition is a number someone has to take on trust, and the predecessor spent that trust.
+ * Everything here is stated precisely enough to be argued with.
+ *
+ * The rules themselves stay inline as prose: nearly every sentence carries a `<code>` sample or
+ * an `<em>` inside it, and this page's whole job is to be read end to end. Its headings and the
+ * callout title are in STRINGS.
+ *
+ * The unknown-status list is core's `UNKNOWN_STATUSES`, not a local copy. This page is the
+ * public explanation of what those statuses mean, so a status added to core and missing here
+ * would leave the site explaining three of four reasons and never say so.
+ */
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title={STRINGS.methodology.title}
+  description={STRINGS.methodology.description}
+  section="about"
+>
+  <PageHeader
+    eyebrow={STRINGS.methodology.eyebrow}
+    title={STRINGS.methodology.title}
+    standfirst={STRINGS.methodology.standfirst}
+  />
+
+  <div class="prose-page">
+    <h2 id="what-is-a-word">{STRINGS.methodology.headings.whatIsAWord}</h2>
+    <p>
+      After the excluded elements below are removed, the remaining text is split into tokens and
+      each token is counted as one word
+      <strong>if and only if it contains at least one Unicode letter or number</strong>. The
+      alphanumeric test is <code>/[\p&#123;L&#125;\p&#123;N&#125;]/u</code>. There is no Unicode
+      normalisation pass; the text is scanned code point by code point exactly as eCFR publishes
+      it. Three kinds of character end a token:
+    </p>
+    <ul>
+      <li>any Unicode whitespace character;</li>
+      <li>
+        en dash, em dash and horizontal bar (<code>–</code>, <code>—</code>, <code>―</code>),
+        because they join independent words in prose;
+      </li>
+      <li>
+        a run of <strong>two or more</strong> hyphen-minus characters. A single hyphen does
+        <em>not</em> split.
+      </li>
+    </ul>
+    <p>
+      Zero-width and invisible formatting characters (U+00AD soft hyphen, U+200B–U+200D, U+2060,
+      U+FEFF) are deleted rather than treated as boundaries, so a word broken across a printed line
+      counts once.
+    </p>
+    <p>Consequences of that rule, spelled out because they are where reasonable people differ:</p>
+    <ul>
+      <li><code>60.1</code> is one word. Section numbers count.</li>
+      <li><code>cross-reference</code> is one word, not two. A single hyphen joins.</li>
+      <li><code>and/or</code> is one word. Slashes, apostrophes and periods do not split.</li>
+      <li>
+        <code>§</code> and <code>—</code> on their own are not words: no letter, no digit. So
+        <code>§ 60.1</code> is one word, not two.
+      </li>
+      <li>
+        <strong>Paragraph designators are counted.</strong> A bare <code>(a)</code> contains the
+        letter “a”, so it is one word, and <code>(a)(2)(iii)</code> is one word too. They are part
+        of the regulation and they are how it is cited.
+      </li>
+      <li>
+        <code>words—including</code> is two words. An em dash separates even with no space around
+        it.
+      </li>
+      <li>
+        <strong>Table contents are not counted at all</strong> — see the exclusions below. A table
+        of emission limits is regulation, and the counts on this site do not reflect it. This is
+        the single largest known limitation of the measurement.
+      </li>
+    </ul>
+
+    <h2 id="exclusions">{STRINGS.methodology.headings.exclusions}</h2>
+    <p>
+      Counting a part's raw XML would count its scaffolding. The following eCFR elements are
+      removed before tokenisation, along with their contents:
+    </p>
+    <dl>
+      <dt><code>HEAD</code></dt>
+      <dd>Headings. They repeat the citation already counted in the structure.</dd>
+      <dt><code>AUTH</code>, <code>SECAUTH</code></dt>
+      <dd>
+        The statutory authority note, at part level and at section level. It cites the enabling
+        statute; it is not the regulation text. It is shown on every part page, just not counted.
+      </dd>
+      <dt><code>SOURCE</code></dt>
+      <dd>Federal Register source notes — publication provenance, not regulatory content.</dd>
+      <dt><code>CITA</code></dt>
+      <dd>Citation notes.</dd>
+      <dt><code>CONTENTS</code></dt>
+      <dd>Generated tables of contents, which would double-count every section heading.</dd>
+      <dt><code>EAR</code></dt>
+      <dd>The running-head “ear” printed in the margin of the paper CFR.</dd>
+      <dt><code>FTNT</code></dt>
+      <dd>Footnote apparatus.</dd>
+      <dt><code>XREF</code></dt>
+      <dd>
+        eCFR's own editorial navigation — “Link to an amendment published at 91 FR 43564” — which
+        appears and disappears as amendments pend. Counting it would make a section's total move
+        for a reason that has nothing to do with the regulation. Measured at 17 occurrences and
+        204 words in 40 CFR 60, and absent from 1 CFR entirely.
+      </dd>
+      <dt>
+        Table markup: <code>TABLE</code>, <code>CAPTION</code>, <code>THEAD</code>,
+        <code>TBODY</code>, <code>TFOOT</code>, <code>TR</code>, <code>TH</code>, <code>TD</code>,
+        and the GPO vocabulary <code>GPOTABLE</code>, <code>BOXHD</code>, <code>CHED</code>,
+        <code>ROW</code>, <code>ENT</code>, <code>TTITLE</code>, <code>TDESC</code>,
+        <code>TNOTE</code>
+      </dt>
+      <dd>
+        Removed <strong>with their contents</strong>, so no text inside a table is counted —
+        neither the column labels nor the values. The reasoning is that a table's “words” are
+        largely repeated headers and units, and counting them makes a title's total a function of
+        how its tables were laid out rather than of how much regulation it contains. It is a
+        defensible line and it is also a real limitation: a part whose substance lives in tables
+        measures low here, and this site does not currently publish a separate table-cell count.
+      </dd>
+    </dl>
+    <p>
+      Two things that look like apparatus are deliberately <em>kept</em>, having been checked.
+      <code>HD1</code>/<code>HD2</code>/<code>HD3</code> — undesignated centre headings inside a
+      section body — are counted, because unlike <code>HEAD</code> they appear in no ancestor's
+      table of contents and so duplicate nothing: 1,997 of them and 9,418 words in 40 CFR 60.
+      <code>MATH</code> is kept too, but eCFR publishes equations as raster images, so it
+      contributes nothing. Equations are effectively invisible to this measurement.
+    </p>
+    <p>
+      The exclusions matter more than they sound. Measured against 1 CFR Chapter I, the heading and
+      note boilerplate is <strong>18.4% of the text</strong>. A count that includes it is not
+      slightly high; it is high by nearly a fifth, and unevenly, because boilerplate density varies
+      with how finely a part is subdivided.
+    </p>
+
+    <h2 id="parsing">{STRINGS.methodology.headings.parsing}</h2>
+    <p>
+      With a real XML parser, never a regular expression. That is a hard rule in this codebase and
+      it is not stylistic: the CFR's XML does not have the regular structure a pattern would need.
+      Nesting depth is not sequential — title 7 jumps from <code>DIV2</code> straight to
+      <code>DIV5</code> in 35 places — and title 40 contains 19,134 untyped <code>DIV</code>
+      elements sitting inside sections. Any pattern that appears to work does so by accident on
+      the titles it was tested against.
+    </p>
+    <p>
+      A second trap sits at the fetch layer. eCFR's <code>?chapter=</code> and
+      <code>?subtitle=</code> query parameters validate but do not slice: they return the entire
+      title. Only <code>?part=</code> and <code>?section=</code> narrow the response. Code that
+      assumes otherwise silently measures a whole title and attributes it to one chapter, which is
+      exactly the failure that produced a 12.7&times; over-credit in this project's predecessor.
+    </p>
+
+    <h2 id="scopes">{STRINGS.methodology.headings.scopes}</h2>
+    <p>
+      eCFR gives each agency a list of CFR references. A reference may name a title, a subtitle, a
+      chapter, a subchapter or a part, and the fields nest — one reference can carry several at
+      once. <strong>The narrowest level present defines the scope.</strong> A reference naming
+      both Chapter I and Part 60 is a reference to Part 60, and crediting the agency with the
+      whole chapter would over-count it by the size of everything else in that chapter.
+    </p>
+    <p>
+      Twelve of the 487 references in the corpus carry a chapter alongside something narrower.
+      They are the reason this rule is stated first and enforced in a shared function rather than
+      re-implemented per caller.
+    </p>
+
+    <h2 id="sharing">{STRINGS.methodology.headings.sharing}</h2>
+    <p>Two totals are published for every agency, and they answer different questions.</p>
+    <dl>
+      <dt>Attributed</dt>
+      <dd>
+        Every scope the agency claims, counted in full. Answers “how much regulation is this
+        agency responsible for?”. It is correct per agency and wrong in aggregate — summing it
+        across agencies counts each shared scope once per claimant.
+      </dd>
+      <dt>Deduplicated</dt>
+      <dd>
+        A scope claimed by <em>n</em> agencies contributes its words divided by <em>n</em> to each
+        of them. Answers “how does the CFR divide up?”, and sums correctly to the corpus. This is
+        the dashboard headline.
+      </dd>
+    </dl>
+    <p>
+      Even division is a <strong>modelling choice, not a measurement</strong>. Nothing in the data
+      says how the administrative burden of a jointly held scope actually splits, so the site
+      applies the only weighting that requires no invention and says so wherever the number
+      appears. Rounding to whole words leaves a residual of at most one word per claimant.
+      The full list of overlaps is on <a href={route.sharedJurisdiction()}>shared jurisdiction</a>.
+    </p>
+    <p>
+      The dashboard also publishes a third figure, “words under shared jurisdiction”, and it is
+      worth being exact about how the three relate, because it is easy to state wrongly. Write
+      <em>w</em> for a shared scope's word count and <em>n</em> for its number of claimants. The
+      shared figure is the sum of <em>w</em> — each shared scope counted once, so it is directly
+      comparable with the deduplicated corpus total. The gap between the attributed and
+      deduplicated totals is the sum of (<em>n</em> − 1) × <em>w</em>, which is larger: a scope
+      claimed by six agencies contributes five extra copies of itself, not one. The two are equal
+      only where every shared scope has exactly two claimants, and in this corpus they have
+      between two and six.
+    </p>
+
+    <h2 id="rollups">{STRINGS.methodology.headings.rollups}</h2>
+    <p>
+      A parent's count is the sum of its children's — but only when <strong>every</strong> child is
+      known. If one descendant could not be measured, the parent is reported as unmeasured rather
+      than as a partial sum. This is deliberate and occasionally frustrating: a partial sum
+      under-reports, and an under-report looks like a plausible number rather than an error, which
+      makes it worse than an obvious gap.
+    </p>
+    <p>
+      Reserved nodes are the exception. A reserved part genuinely contains nothing, so it
+      contributes a measured zero and does not spoil the roll-up.
+    </p>
+
+    <h2 id="unknown">{STRINGS.methodology.headings.unknown}</h2>
+    <p>
+      An em dash is never a zero and never a placeholder. It means the value was not measured, and
+      hovering it gives the reason. There are four:
+    </p>
+    <dl>
+      {
+        UNKNOWN_STATUSES.map((status) => (
+          <>
+            <dt>
+              <code>{status}</code> — {statusLabel(status)}
+            </dt>
+            <dd>{statusExplanation(status)}</dd>
+          </>
+        ))
+      }
+    </dl>
+    <p>
+      Every node in this state is listed, grouped and counted on
+      <a href={route.dataQuality()}> data quality</a>.
+    </p>
+
+    <h2 id="dates">{STRINGS.methodology.headings.dates}</h2>
+    <p>
+      eCFR publishes on business days only — 57 issue dates in an 84-day window, none at a
+      weekend, with a median of 48 changed sections per publishing day. Charts on this site do not
+      smooth across those gaps.
+    </p>
+    <p>
+      Amendments carry two dates and they disagree in about half of all rows. This site keys
+      content on <strong>issue date</strong>, not amendment date, because 40.4% of amendment dates
+      fall before eCFR's 2017-01-01 full-text horizon; fetching at an amendment date returns
+      nothing, and a naive comparison then renders “section added” for a section that has existed
+      for decades.
+    </p>
+
+    <Callout tone="accent" class="mt-8" title={STRINGS.methodology.oursCalloutTitle}>
+      <p>
+        No federal agency publishes a word count of the CFR. Every figure on this site is a
+        derived measurement produced by this project's parser against the eCFR's public API. They
+        are reproducible — the code and the pipeline are open — but they are not official, and
+        they should be cited as this project's measurements rather than as government statistics.
+        See <a href={route.about()}>about and attribution</a>.
+      </p>
+    </Callout>
+  </div>
+</Base>

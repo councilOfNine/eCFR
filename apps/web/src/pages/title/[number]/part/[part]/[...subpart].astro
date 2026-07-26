@@ -1,0 +1,275 @@
+---
+/**
+ * THE READER. 9,664 parts plus subpart slices — the bulk of the ~11,100 pages in this build.
+ *
+ * Everything on this page is in the HTML: the full regulation text, the table of contents, the
+ * authority block, the measurements. There is no fetch, no hydration and no skeleton, which is
+ * the whole reason it can hit the 795 ms LCP the static version measured against the SPA's
+ * 3,081 ms — and why its CLS is zero rather than the 0.112 a skeleton-to-content swap produced.
+ *
+ * ONE ROUTE, TWO SHAPES. A rest parameter handles both `/title/40/part/60` and
+ * `/title/26/part/1/A`. Oversized parts are published as one slice per subpart, and the bare
+ * part URL still resolves — it renders a slice index. 26 CFR Part 1 is 69,598,633 bytes, over
+ * both the practical page budget and Cloudflare's 25 MiB per-asset cap, so `/title/26/part/1`
+ * 404ing would take the most-cited part in the CFR off the site entirely.
+ *
+ * `set:html` is used for the body. That is safe here and nowhere else: the content comes from
+ * the snapshot's `content/` directory, written by the sync pipeline from eCFR XML it has already
+ * sanitised. Nothing user-supplied reaches it, and no request-time input can reach it either,
+ * because there is no request — the string is baked at build time.
+ */
+import type { GetStaticPaths } from 'astro';
+import Breadcrumbs from '../../../../../components/Breadcrumbs.astro';
+import Callout from '../../../../../components/Callout.astro';
+import CopyCitation from '../../../../../components/CopyCitation.astro';
+import PartToc from '../../../../../components/PartToc.astro';
+import WordCountView from '../../../../../components/WordCount.astro';
+import { STRINGS } from '../../../../../constants/strings';
+import { formatDate, formatInt } from '../../../../../data/format';
+import { atlas } from '../../../../../data/load';
+import * as route from '../../../../../data/routes';
+import Base from '../../../../../layouts/Base.astro';
+
+export const getStaticPaths = (async () => {
+  const { parts } = await (await atlas()).routes();
+  return parts.map(({ title, part, subpart }) => ({
+    // `undefined` for the rest param makes Astro emit the bare `/title/n/part/p` route.
+    params: { number: String(title), part, subpart: subpart ?? undefined },
+  }));
+}) satisfies GetStaticPaths;
+
+const data = await atlas();
+const titleNumber = Number.parseInt(Astro.params.number ?? '', 10);
+const partId = Astro.params.part ?? '';
+const subpart = Astro.params.subpart ?? null;
+
+const part = Number.isNaN(titleNumber) ? null : await data.getPart(titleNumber, partId, subpart);
+
+if (!part) {
+  throw new Error(
+    `build: /title/${titleNumber}/part/${partId}${subpart ? `/${subpart}` : ''} was routed but ` +
+      'getPart() returned null.',
+  );
+}
+
+const isSliceIndex = part.slices.length > 0 && part.slice === null;
+const heading = part.reserved ? STRINGS.partPage.reservedHeading(part.display) : part.label;
+---
+
+<Base
+  title={STRINGS.partPage.title(part.display, part.label)}
+  description={STRINGS.partPage.description(part.display, part.label)}
+  section="titles"
+  wide
+>
+  <Breadcrumbs
+    crumbs={[
+      { label: STRINGS.partPage.breadcrumbRoot, href: route.titleIndex() },
+      {
+        label: STRINGS.partPage.breadcrumbTitle(part.title_number),
+        href: route.title(part.title_number),
+      },
+      ...(part.chapter
+        ? [
+            {
+              label: STRINGS.partPage.breadcrumbChapter(part.chapter.identifier),
+              href: route.chapter(part.title_number, part.chapter.identifier),
+            },
+          ]
+        : []),
+      ...(part.slice
+        ? [
+            {
+              label: STRINGS.partPage.breadcrumbPart(part.identifier),
+              href: route.part(part.title_number, part.identifier),
+            },
+            { label: STRINGS.partPage.breadcrumbSubpart(part.slice) },
+          ]
+        : [{ label: STRINGS.partPage.breadcrumbPart(part.identifier) }]),
+    ]}
+  />
+
+  <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+    {/* ── main column ─────────────────────────────────────────────────────── */}
+    <article class="min-w-0">
+      <header class="mb-6 border-b border-[color:var(--color-border)] pb-5">
+        <p class="eyebrow">
+          {part.display}{part.slice && STRINGS.partPage.subpartEyebrow(part.slice)}
+        </p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{heading}</h1>
+        <p class="mt-1 text-sm text-[color:var(--color-ink-muted)]">
+          {part.title_name}
+          {
+            part.chapter &&
+              STRINGS.partPage.chapterLine(part.chapter.identifier, part.chapter.label)
+          }
+          {part.subchapter && STRINGS.partPage.subchapterLine(part.subchapter.identifier)}
+        </p>
+
+        <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <CopyCitation
+            citation={
+              part.slice
+                ? STRINGS.partPage.citationWithSubpart(part.display, part.slice)
+                : part.display
+            }
+            ecfrUrl={part.ecfr_url}
+            sourceDate={data.manifest.source_date}
+          />
+          <a href={part.ecfr_url} rel="external noopener" class="text-xs">
+            {STRINGS.common.officialTextLink}
+          </a>
+        </div>
+
+        <dl class="mt-5 flex flex-wrap gap-x-8 gap-y-3 text-sm">
+          <div>
+            <dt class="eyebrow">{STRINGS.partPage.words}</dt>
+            <dd class="mt-0.5"><WordCountView value={part.word_count} /></dd>
+          </div>
+          <div>
+            <dt class="eyebrow">{STRINGS.partPage.sections}</dt>
+            <dd class="figure mt-0.5">{formatInt(part.section_list.length)}</dd>
+          </div>
+          {
+            part.last_amended_on && (
+              <div>
+                <dt class="eyebrow">{STRINGS.partPage.lastAmended}</dt>
+                <dd class="figure mt-0.5">{formatDate(part.last_amended_on)}</dd>
+              </div>
+            )
+          }
+          {
+            part.agencies.length > 0 && (
+              <div>
+                <dt class="eyebrow">{STRINGS.partPage.administeredBy}</dt>
+                <dd class="mt-0.5">
+                  {part.agencies.map((agency, index) => (
+                    <>
+                      {index > 0 && ', '}
+                      <a href={route.agency(agency.slug)}>{agency.display_name}</a>
+                    </>
+                  ))}
+                </dd>
+              </div>
+            )
+          }
+        </dl>
+      </header>
+
+      {/* ── authority / source ─────────────────────────────────────────────── */}
+      {
+        (part.authority || part.source_note || part.editorial_note) && (
+          <section class="mb-8 space-y-3" aria-labelledby="authority-heading">
+            <h2 id="authority-heading" class="visually-hidden">
+              {STRINGS.partPage.authorityHeading}
+            </h2>
+            {part.authority && (
+              <div class="card card-tight">
+                <p class="eyebrow">{STRINGS.partPage.authority}</p>
+                <p class="mt-1 font-serif text-sm">{part.authority}</p>
+              </div>
+            )}
+            {part.source_note && (
+              <div class="card card-tight">
+                <p class="eyebrow">{STRINGS.partPage.source}</p>
+                <p class="mt-1 font-serif text-sm">{part.source_note}</p>
+              </div>
+            )}
+            {part.editorial_note && (
+              <div class="card card-tight">
+                <p class="eyebrow">{STRINGS.partPage.editorialNote}</p>
+                <p class="mt-1 font-serif text-sm">{part.editorial_note}</p>
+              </div>
+            )}
+          </section>
+        )
+      }
+
+      {/* ── slice index ────────────────────────────────────────────────────── */}
+      {
+        isSliceIndex && (
+          <Callout tone="accent" title={STRINGS.partPage.sliceCalloutTitle} class="mb-8">
+            <p>
+              {part.content_unavailable_reason ?? STRINGS.partPage.sliceFallbackReason}
+            </p>
+            <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+              {part.slices
+                .filter((slice) => slice.subpart !== null)
+                .map((slice) => (
+                  <li>
+                    <a
+                      href={route.part(part.title_number, part.identifier, slice.subpart)}
+                      class="flex items-baseline justify-between gap-3"
+                    >
+                      <span>{slice.label}</span>
+                      <WordCountView value={slice.word_count} variant="compact" class="text-xs" />
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          </Callout>
+        )
+      }
+
+      {/* ── the text ───────────────────────────────────────────────────────── */}
+      {
+        part.content_html !== null ? (
+          <div class="reg-prose" set:html={part.content_html} />
+        ) : !isSliceIndex ? (
+          <Callout tone="unknown" title={STRINGS.partPage.noContentTitle}>
+            <p>
+              {part.content_unavailable_reason ?? STRINGS.partPage.noContentFallbackReason}
+            </p>
+            <p class="mt-2">
+              The measurements, table of contents and metadata above are still complete. The
+              authoritative text is always at
+              <a href={part.ecfr_url} rel="external noopener" class="mx-1">
+                {part.display} on eCFR ↗
+              </a>
+              — this project never fetches it on a page request.
+            </p>
+          </Callout>
+        ) : null
+      }
+
+      {
+        part.reserved && (
+          <Callout tone="neutral" class="mt-6" title={STRINGS.partPage.reservedCalloutTitle}>
+            <p>{STRINGS.partPage.reservedCallout}</p>
+          </Callout>
+        )
+      }
+    </article>
+
+    {/* ── sidebar ─────────────────────────────────────────────────────────── */}
+    <aside class="lg:sticky lg:top-4">
+      {
+        part.slices.length > 0 && (
+          <nav aria-label={STRINGS.partPage.subpartsNav} class="mb-6">
+            <h2 class="eyebrow mb-2">{STRINGS.partPage.subpartsNav}</h2>
+            <ul>
+              {part.slices.map((slice) => {
+                const href = route.part(part.title_number, part.identifier, slice.subpart);
+                const current = slice.subpart === part.slice;
+                return (
+                  <li>
+                    <a href={href} class="toc-link" aria-current={current ? 'true' : undefined}>
+                      {slice.label}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        )
+      }
+
+      <PartToc sections={part.section_list} />
+
+      <p class="mt-5 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
+        {STRINGS.partPage.boilerplateNote}
+        <a href={route.methodology()} class="ml-1">{STRINGS.common.methodologyLink}</a>
+      </p>
+    </aside>
+  </div>
+</Base>

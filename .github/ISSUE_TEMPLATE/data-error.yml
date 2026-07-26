@@ -1,0 +1,98 @@
+name: Data looks wrong
+description: A word count, agency attribution, total, or date on the site appears incorrect.
+title: 'Data: '
+labels: ['data-error']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the most important kind of issue this project can receive.**
+
+        The whole point of ecfr-atlas is publishing measurements that can be checked, so a
+        disputed number is a first-class bug rather than a complaint. You do not need to know
+        what is wrong or why — telling us that something looks off is enough.
+
+        Every nightly export is on public R2 with a manifest of per-table row counts and a
+        sha256, so you can run our arithmetic against the same bytes we used.
+
+  - type: input
+    id: url
+    attributes:
+      label: Where did you see it?
+      description: The page or API endpoint URL.
+      placeholder: https://…/agency/environmental-protection-agency
+    validations:
+      required: true
+
+  - type: input
+    id: citation
+    attributes:
+      label: Which part of the CFR does it concern?
+      description: >-
+        A citation if you have one — e.g. `40 CFR Part 60`, `42 CFR Chapter I`, or an agency
+        slug. Leave blank if the problem is a site-wide total.
+      placeholder: 40 CFR Part 60
+    validations:
+      required: false
+
+  - type: textarea
+    id: shown
+    attributes:
+      label: What does the site currently show?
+      description: Copy the exact figure, including any status label such as “—” or “partial”.
+      placeholder: |
+        Deduplicated word count: 12,481,003
+        Coverage: 100%
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What do you believe is correct, and how did you work it out?
+      description: >-
+        A different number, a different agency, “this should be marked unavailable rather than
+        zero”, or just “this is roughly 10× larger than it should be”. Show your working if you
+        have it — counting method, source, date.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem does this look like?
+      description: A guess is fine. Skip it if you would rather not speculate.
+      options:
+        - A count looks far too large
+        - A count looks far too small
+        - The wrong agency is credited
+        - Two agencies share this scope and it is being handled wrong
+        - A number is shown where “unknown” would be correct
+        - Zero is shown where “unknown” would be correct
+        - A date or amendment history is wrong
+        - Something else / not sure
+    validations:
+      required: false
+
+  - type: input
+    id: as_of
+    attributes:
+      label: '“Current as of” date shown on the page'
+      description: >-
+        Shown in the site footer. It tells us which nightly run produced the figure you are
+        looking at.
+      placeholder: 2026-07-24
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: >-
+            I have checked https://www.ecfr.gov for the official text — this is about a figure
+            *this project* derived, not about the content of the regulation itself.
+          required: false
+        - label: I searched existing issues for the same citation or agency.
+          required: false

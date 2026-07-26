@@ -1,0 +1,147 @@
+name: eCFR contract
+
+# Proves that the assumptions in packages/core/src/ecfr-schemas.ts still describe the live eCFR
+# API. This is the test that keeps the project honest over years rather than weeks: upstream
+# will change something eventually, and the alternative to finding out here is finding out from
+# a word count that quietly became wrong.
+#
+# ON `schedule` ONLY — deliberately never on pull_request:
+#   * it hits a third-party API, so it would fail on every fork PR (no different behaviour, just
+#     someone else's rate-limit bucket) and turn a red X into background noise;
+#   * eCFR's limiter is a token bucket, so a busy PR day would flake it;
+#   * an external service's availability is not a property of a contributor's diff, and gating
+#     merges on it teaches people to merge past red checks.
+on:
+  schedule:
+    # 06:20 UTC — 40 minutes ahead of the nightly sync, on the same business-day cadence, so a
+    # breaking change is a filed issue before the writer runs rather than after.
+    - cron: '20 6 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Only to open, comment on and close the single drift issue.
+  issues: write
+
+concurrency:
+  group: contract
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DRIFT_LABEL: contract-drift
+
+jobs:
+  check:
+    name: validate live responses against the Zod schemas
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The checker imports packages/core/dist, so the schemas under test are the exact artefact
+      # the sync pipeline runs rather than a separately transpiled copy that could disagree.
+      - name: Build core
+        run: pnpm --filter @ecfr-atlas/core build
+
+      # Exit codes carry the classification: 0 holds · 1 broken · 75 transient (EX_TEMPFAIL).
+      - name: Run contract check
+        id: check
+        run: |
+          set +e
+          node scripts/contract/check.ts --json contract-report.json --markdown contract-report.md
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          case "$code" in
+            0)  echo "status=ok"        >> "$GITHUB_OUTPUT" ;;
+            75) echo "status=transient" >> "$GITHUB_OUTPUT" ;;
+            *)  echo "status=broken"    >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: contract-report
+          path: |
+            contract-report.json
+            contract-report.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Throttled runs are the common case and are not news. Annotate and stop — no issue, no
+      # notification, nothing for the maintainer to triage. If this opened an issue for a 429,
+      # the drift label would be worthless within a month.
+      - name: Note transient upstream failure
+        if: steps.check.outputs.status == 'transient'
+        run: |
+          echo "::notice title=eCFR throttled::The contract check could not complete (429/504 or a non-JSON 200). This says nothing about the schema contract; no issue opened."
+
+      # Exactly ONE open issue, ever. A new comment on the existing one beats a new issue per
+      # night: drift usually persists for days and a per-run issue buries the original diagnosis.
+      - name: Open or update the drift issue
+        if: steps.check.outputs.status == 'broken'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create "$DRIFT_LABEL" \
+            --color B60205 \
+            --description "The live eCFR API no longer matches packages/core/src/ecfr-schemas.ts" \
+            2>/dev/null || true
+
+          {
+            cat contract-report.md
+            echo
+            echo "Run: $RUN_URL"
+          } > issue-body.md
+
+          existing="$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label "$DRIFT_LABEL" --state open --limit 1 \
+            --json number --jq '.[0].number // empty')"
+
+          if [ -n "$existing" ]; then
+            echo "Updating issue #$existing"
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body-file issue-body.md
+          else
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "eCFR API contract drift detected" \
+              --label "$DRIFT_LABEL" \
+              --body-file issue-body.md
+          fi
+          exit 1
+
+      # Closing on recovery matters as much as opening: an issue that stays open after upstream
+      # reverts trains the maintainer to ignore the label.
+      - name: Close the drift issue on recovery
+        if: steps.check.outputs.status == 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label "$DRIFT_LABEL" --state open --limit 1 \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" \
+              --repo "${{ github.repository }}" \
+              --comment "All contract checks pass again as of $RUN_URL. Closing automatically. If the schemas were widened to accommodate a change, make sure the code that reads those fields was updated too."
+          fi

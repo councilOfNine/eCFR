@@ -1,0 +1,85 @@
+---
+/**
+ * Monthly amendment activity as a column chart, in HTML and CSS.
+ *
+ * Two things this deliberately does NOT do:
+ *
+ *   1. It does not smooth or interpolate. eCFR publishes on business days only — 57 issue dates
+ *      in 84 days, zero weekends, median 48 changed sections per day — so a flat stretch is a
+ *      real property of the source, not a rendering gap to be filled in.
+ *   2. It does not fold in amendments it could not attribute. Rows with no part identifier are
+ *      reported as a separate count beneath the chart, because silently dropping them would
+ *      understate activity and silently including them would misattribute it.
+ */
+import { STRINGS } from '../constants/strings';
+import type { AmendmentSeries } from '../data/contract';
+import { formatInt, formatMonth } from '../data/format';
+
+interface Props {
+  series: AmendmentSeries;
+  caption: string;
+}
+
+const { series, caption } = Astro.props;
+const max = Math.max(1, ...series.buckets.map((b) => b.count));
+const empty = series.buckets.length === 0;
+---
+
+<figure class="card">
+  <figcaption class="flex flex-wrap items-baseline justify-between gap-2">
+    <span class="eyebrow">{caption}</span>
+    {
+      !empty && (
+        <span class="text-xs text-[color:var(--color-ink-subtle)]">
+          {STRINGS.amendmentTimeline.total(formatInt(series.total))}
+          {' '}{series.from && formatMonth(series.from)} – {series.to && formatMonth(series.to)}
+        </span>
+      )
+    }
+  </figcaption>
+
+  {
+    empty ? (
+      <p class="mt-3 text-sm text-[color:var(--color-ink-subtle)]">
+        {STRINGS.amendmentTimeline.empty}
+      </p>
+    ) : (
+      <>
+        <ol class="mt-4 flex h-28 items-end gap-[2px]" role="list">
+          {series.buckets.map((bucket) => (
+            <li
+              class="group relative flex-1"
+              title={STRINGS.amendmentTimeline.monthDetail(
+                formatMonth(bucket.month),
+                formatInt(bucket.count),
+              )}
+            >
+              <span
+                class="block w-full rounded-t-[2px] bg-[color:var(--color-accent)]"
+                style={`height:${Math.max(2, (bucket.count / max) * 100).toFixed(2)}%`}
+              />
+              <span class="visually-hidden">
+                {STRINGS.amendmentTimeline.monthDetail(
+                  formatMonth(bucket.month),
+                  formatInt(bucket.count),
+                )}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div class="mt-1.5 flex justify-between text-[0.68rem] text-[color:var(--color-ink-subtle)]">
+          <span>{series.from && formatMonth(series.from)}</span>
+          <span>{series.to && formatMonth(series.to)}</span>
+        </div>
+      </>
+    )
+  }
+
+  {
+    series.unattributable > 0 && (
+      <p class="mt-3 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.amendmentTimeline.unattributable(formatInt(series.unattributable))}
+      </p>
+    )
+  }
+</figure>

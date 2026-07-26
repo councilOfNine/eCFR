@@ -1,0 +1,178 @@
+name: Open-data export
+
+# Publishes the whole measured corpus as a downloadable SQLite dump.
+#
+# This is the civic deliverable. R2 egress is free, so a researcher can take everything —
+# 275,271 structure nodes, 478,050 amendment rows, every word count and the status attached to
+# it — without asking us for anything and without us paying for bandwidth. A dashboard people
+# cannot check is just an assertion; the export is what makes the numbers falsifiable.
+on:
+  # Chained off the nightly rather than run on its own cron: exporting a database that a failed
+  # sync left mid-write would publish a snapshot nobody can reproduce.
+  workflow_run:
+    workflows: ['Nightly sync']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: export
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  D1_DATABASE: ecfr-atlas
+  R2_EXPORT_BUCKET: ecfr-atlas-exports
+
+jobs:
+  export:
+    name: dump · compress · publish
+    # `workflow_run` fires on completion regardless of outcome, so the success filter is here.
+    # A manual dispatch has no upstream conclusion and is always allowed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve snapshot date
+        id: meta
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # PUBLIC TABLES ONLY. The table list lives in scripts/ci/public-tables.ts as an
+      # allow-list, so a future migration cannot add a table that leaks into the export by
+      # default. api_account holds subscriber emails and api_key holds key hashes; neither is
+      # ever in this dump. See the manifest's `withheldTables` for the published statement of it.
+      - name: Export D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mapfile -t table_flags < <(node scripts/ci/public-tables.ts --wrangler-flags | tr ' ' '\n')
+          pnpm exec wrangler d1 export "$D1_DATABASE" \
+            --remote \
+            --output export.sql \
+            "${table_flags[@]}"
+          ls -l export.sql
+
+      # A truncated or empty dump overwriting a good `latest.sql.gz` would be the export
+      # equivalent of the bug this project exists to fix: a plausible-looking artefact that is
+      # quietly wrong. 20 MB is far below a real dump and far above any failure mode.
+      - name: Sanity-check the dump
+        run: |
+          bytes=$(stat -c%s export.sql)
+          echo "export.sql is $bytes bytes"
+          if [ "$bytes" -lt 20000000 ]; then
+            echo "::error title=Export too small::export.sql is only ${bytes} B. A full corpus dump is far larger; refusing to publish over latest.sql.gz."
+            exit 1
+          fi
+          if ! grep -q 'INSERT INTO' export.sql; then
+            echo "::error title=Export has no rows::No INSERT statements in the dump."
+            exit 1
+          fi
+
+      - name: Compress
+        run: |
+          gzip -9 -k -f export.sql
+          ls -l export.sql.gz
+
+      - name: Build manifest
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node scripts/ci/export-manifest.ts \
+            --db "$D1_DATABASE" \
+            --date "${{ steps.meta.outputs.date }}" \
+            --sql export.sql \
+            --gz export.sql.gz \
+            --out manifest.json
+          {
+            echo '## Export manifest'
+            echo
+            echo '```json'
+            cat manifest.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Dated object first, then latest. In that order a failure between the two leaves the
+      # previous `latest` intact and the new snapshot still retrievable by date.
+      - name: Publish to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATE: ${{ steps.meta.outputs.date }}
+        run: |
+          # Args are assembled into an array; `${x:+--flag "$x"}` would splice literal quote
+          # characters into argv and wrangler would receive a content type of '"gzip"'.
+          put() {
+            local key="$1" file="$2" ctype="$3" cencoding="$4" cache="$5"
+            local args=(r2 object put "$R2_EXPORT_BUCKET/$key" --file "$file" --remote
+                        --content-type "$ctype" --cache-control "$cache")
+            if [ -n "$cencoding" ]; then args+=(--content-encoding "$cencoding"); fi
+            pnpm exec wrangler "${args[@]}"
+          }
+
+          # Dated objects never change, so they can be cached forever.
+          put "$DATE.sql.gz"         export.sql.gz "application/sql"  "gzip" "public, max-age=31536000, immutable"
+          put "$DATE.manifest.json"  manifest.json "application/json" ""     "public, max-age=31536000, immutable"
+
+          # `latest` is a moving pointer; one hour keeps it fresh without hammering the origin.
+          put "latest.sql.gz"        export.sql.gz "application/sql"  "gzip" "public, max-age=3600"
+          put "latest.manifest.json" manifest.json "application/json" ""     "public, max-age=3600"
+
+      - name: Upload manifest artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-manifest-${{ steps.meta.outputs.date }}
+          path: manifest.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Healthcheck
+        if: always()
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_EXPORT_URL }}
+          OK: ${{ job.status == 'success' }}
+        run: |
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            if [ "$OK" = "true" ]; then
+              curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL" --data-binary @manifest.json || true
+            else
+              curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL/fail" \
+                --data-raw "export failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" || true
+            fi
+          fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# BUCKET SETUP
+#
+#   The export bucket (`ecfr-atlas-exports`) must have public access enabled (an r2.dev
+#   subdomain or, better, a custom domain) — the whole point is that nobody needs a key to fetch
+#   it. The CONTENT bucket (`ecfr-atlas-content`), which the nightly sync writes and apps/api
+#   reads, is a DIFFERENT bucket and stays private; the API reaches it through a binding. See
+#   docs/ARCHITECTURE.md § Buckets for the full list.
+#
+#   Retention: R2 lifecycle rule, expire objects older than 90 days matching `20*.sql.gz`, and
+#   keep `latest.*` forever. Set it on the bucket, not here — a workflow that deletes data is a
+#   workflow that eventually deletes the wrong data.
+# ─────────────────────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,146 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecfr-atlas-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // fast-xml-parser reaches for a couple of Node builtins on its CJS path. The flag costs
+  // nothing at runtime and keeps the /diff parser from being the reason a deploy fails.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  // Traces on every request. This Worker is the only part of the system that serves live
+  // traffic, so sampling it down would mean debugging a 429 report with no 429 in the logs.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ecfr-atlas",
+      // Replace after `wrangler d1 create ecfr-atlas`. Left as the nil UUID rather than a
+      // real-looking value so a forgotten substitution fails loudly instead of writing to
+      // somebody else's database.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Migrations are owned by packages/db, not by this app. Root `pnpm db:migrate:*`
+      // deliberately points wrangler here, so this path is what actually gets applied.
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+
+  // Static assets — exactly one thing lives here: the self-hosted Scalar bundle that /docs
+  // loads. It used to come from an unpinned CDN URL that was allowlisted in the docs page's
+  // script-src; serving it ourselves removes the third party from the page entirely.
+  //
+  // `public/dist/` is git-ignored and regenerated from node_modules by
+  // `pnpm --filter @ecfr-atlas/api vendor:scalar`, which the `dev` and `deploy` scripts run.
+  // The `dist` name is deliberate — see scripts/vendor-scalar.ts.
+  //
+  // Assets are matched before the Worker and fall through to it when nothing matches
+  // (`not_found_handling` defaults to "none"), so no API route is shadowed. Response headers
+  // for them come from public/_headers, because the Worker's own middleware never sees them.
+  "assets": {
+    "directory": "public"
+  },
+
+  "r2_buckets": [
+    {
+      "binding": "CONTENT",
+      "bucket_name": "ecfr-atlas-content",
+      "preview_bucket_name": "ecfr-atlas-content-preview"
+    }
+  ],
+
+  // BURST PROTECTION ONLY — never quota.
+  //
+  // The counter is per Cloudflare location and the docs say outright that it is "not to be
+  // used as an accurate accounting system". A user routed through two colos legitimately gets
+  // two buckets. Accurate daily accounting is the D1 counter in api_usage_day; this exists so
+  // one client cannot open 500 sockets and make that counter the bottleneck.
+  //
+  // `period` accepts ONLY 10 or 60. One namespace carries one limit, so a per-tier ceiling
+  // needs one namespace per tier.
+  //
+  // The `limit` values below are duplicated in TIERS (src/config.ts) because a binding cannot
+  // report its own configuration back to the Worker. test/config.test.ts parses this file and
+  // asserts the two agree — that test is the only thing keeping them honest.
+  "ratelimits": [
+    {
+      "name": "BURST_ANON",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      "name": "BURST_REGISTERED",
+      "namespace_id": "1002",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "BURST_ELEVATED",
+      "namespace_id": "1003",
+      "simple": { "limit": 600, "period": 60 }
+    }
+  ],
+
+  "vars": {
+    "ENVIRONMENT": "production",
+    // Browser origin allowed to call the account-management routes with credentials. The
+    // read-only /v1 data routes are open to `*`; key management is not.
+    "SITE_ORIGIN": "https://ecfr-atlas.org",
+    // Public base for R2-hosted part content. Empty means "no public route configured", and
+    // /v1/parts then returns `content.url: null` rather than a URL that 404s.
+    "PUBLIC_CONTENT_BASE_URL": "",
+    // eCFR asks for a descriptive User-Agent with a contact URL, and rate-limits harder
+    // without one. Only /v1/diff ever sends it.
+    "ECFR_USER_AGENT": "ecfr-atlas/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)",
+    "DOCS_URL": "https://api.ecfr-atlas.org/docs"
+  },
+
+  // SECRETS — set with `wrangler secret put <NAME>`, never in this file.
+  //
+  //   ANON_SALT    REQUIRED, in every environment. Salts the anonymous quota key so a database
+  //                dump cannot be brute-forced back to IP addresses; an unsalted SHA-256 of a
+  //                32-bit address space is not a pseudonym. There is NO fallback value: a
+  //                deployment without it answers 500 on every anonymous request and logs
+  //                `anon_salt_misconfigured`, because a predictable salt lets a third party
+  //                compute another client's quota bucket. Minimum 16 characters. Rotating it
+  //                only resets the current day's anonymous counters.
+  //
+  //                    openssl rand -base64 32 | \
+  //                      wrangler secret put ANON_SALT --config apps/api/wrangler.jsonc
+  //
+  //                Staging is a separate Worker and needs its own:
+  //
+  //                    openssl rand -base64 32 | \
+  //                      wrangler secret put ANON_SALT --env staging \
+  //                        --config apps/api/wrangler.jsonc
+  //
+  //   ADMIN_TOKEN  Optional. Enables POST /v1/account/tier, the operator-only elevated-tier
+  //                grant. While unset, that route answers 404 and there is no privileged
+  //                surface at all.
+  //
+  // For `wrangler dev`, put both in apps/api/.dev.vars (git-ignored):
+  //
+  //     ANON_SALT="any long random string, at least 16 characters"
+  //     ADMIN_TOKEN="optional"
+
+  // Retention only. The corpus sync is a Node pipeline in GitHub Actions — a title's XML does
+  // not fit in a Worker isolate — so nothing here touches ecfr.gov on a schedule.
+  "triggers": {
+    "crons": ["17 4 * * *"]
+  },
+
+  "env": {
+    "staging": {
+      "name": "ecfr-atlas-api-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "SITE_ORIGIN": "https://staging.ecfr-atlas.org",
+        "PUBLIC_CONTENT_BASE_URL": "",
+        "ECFR_USER_AGENT": "ecfr-atlas-staging/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)",
+        "DOCS_URL": "https://staging-api.ecfr-atlas.org/docs"
+      }
+    }
+  }
+}

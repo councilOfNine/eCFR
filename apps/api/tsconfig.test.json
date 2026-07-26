@@ -1,0 +1,22 @@
+{
+  // Type-checks the tests without emitting. Separate from tsconfig.json because the build is
+  // a composite project rooted at src/, and dragging test/ into that would put test output in
+  // dist/ and reference node:sqlite from the Worker's project graph.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    // The node-project tests are the only code here that runs in Node rather than workerd, so
+    // both sets of ambient types are needed at once. `@cloudflare/vitest-pool-workers/types`
+    // declares the `cloudflare:test` module that everything under test/workers/ imports —
+    // without it those files typecheck as TS2307 while running perfectly, which is the worst
+    // of both.
+    "types": ["@cloudflare/workers-types", "node", "@cloudflare/vitest-pool-workers/types"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"],
+  "references": []
+}

@@ -1,0 +1,78 @@
+---
+import PageHeader from '../../components/PageHeader.astro';
+import WordCountView from '../../components/WordCount.astro';
+import { STRINGS } from '../../constants/strings';
+import { formatDate, formatInt } from '../../data/format';
+/**
+ * All 50 CFR titles.
+ *
+ * Title 35 is reserved and has three null date fields; it renders as reserved with a genuine
+ * zero, because `reserved_empty` is a KNOWN status — the CFR really does have nothing there.
+ * That is the one and only case on this site where 0 is the honest answer.
+ */
+import { atlas } from '../../data/load';
+import * as route from '../../data/routes';
+import Base from '../../layouts/Base.astro';
+
+const data = await atlas();
+const titles = await data.listTitles();
+const active = titles.filter((t) => !t.reserved);
+---
+
+<Base
+  title={STRINGS.titleIndex.title}
+  description={STRINGS.titleIndex.description}
+  section="titles"
+>
+  <PageHeader
+    eyebrow={STRINGS.titleIndex.eyebrow}
+    title={STRINGS.titleIndex.title}
+    standfirst={STRINGS.titleIndex.standfirst(formatInt(active.length))}
+  />
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <caption class="visually-hidden">{STRINGS.titleIndex.caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="num">{STRINGS.titleIndex.columns.number}</th>
+          <th scope="col">{STRINGS.titleIndex.columns.title}</th>
+          <th scope="col" class="num">{STRINGS.titleIndex.columns.words}</th>
+          <th scope="col" class="num">{STRINGS.titleIndex.columns.chapters}</th>
+          <th scope="col" class="num">{STRINGS.titleIndex.columns.parts}</th>
+          <th scope="col" class="num">{STRINGS.titleIndex.columns.sections}</th>
+          <th scope="col">{STRINGS.titleIndex.columns.lastAmended}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          titles.map((title) => (
+            <tr>
+              <td class="num font-mono text-xs">{title.number}</td>
+              <th scope="row" class="font-normal">
+                <a href={route.title(title.number)}>{title.name}</a>
+                {title.reserved && <span class="badge badge-neutral ml-2">{STRINGS.common.reservedBadge}</span>}
+              </th>
+              <td class="num"><WordCountView value={title.word_count} /></td>
+              <td class="num">{formatInt(title.chapters)}</td>
+              <td class="num">{formatInt(title.parts)}</td>
+              <td class="num">{formatInt(title.sections)}</td>
+              <td class="whitespace-nowrap text-xs text-[color:var(--color-ink-muted)]">
+                {
+                  /*
+                    Null on reserved titles. Rendering the em dash here rather than crashing is
+                    the null-guard the schema comment warns about: without it, exactly one title
+                    throws, every night.
+                  */
+                  title.latest_amended_on
+                    ? formatDate(title.latest_amended_on)
+                    : STRINGS.common.missingValue
+                }
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</Base>

@@ -1,0 +1,308 @@
+---
+import Callout from '../components/Callout.astro';
+import CoverageBadge from '../components/CoverageBadge.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { STRINGS } from '../constants/strings';
+import { formatInt, formatPct, statusExplanation, statusLabel } from '../data/format';
+/**
+ * Data quality — radical transparency as the credibility mechanism.
+ *
+ * The predecessor's dashboard looked complete because it filled every gap with a number. This
+ * page exists to make the gaps countable: how many nodes are unmeasured, why each one is, which
+ * titles are worst affected, which agencies have partial coverage, and which references point at
+ * scopes that no longer exist.
+ *
+ * Samples are bounded, and every truncation says so with the full count beside it. Showing 50 of
+ * 12,000 without mentioning the 12,000 would be a small version of the same dishonesty.
+ */
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+import Base from '../layouts/Base.astro';
+
+const data = await atlas();
+const quality = await data.getDataQuality();
+const { manifest } = data;
+
+const knownPct = quality.nodes_total > 0 ? quality.nodes_known / quality.nodes_total : 0;
+---
+
+<Base
+  title={STRINGS.dataQuality.title}
+  description={STRINGS.dataQuality.description}
+  section="quality"
+>
+  <PageHeader
+    eyebrow={STRINGS.dataQuality.eyebrow}
+    title={STRINGS.dataQuality.title}
+    standfirst={STRINGS.dataQuality.standfirst}
+  />
+
+  <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.dataQuality.summaryLabel}>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.dataQuality.measuredCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatPct(knownPct, 2)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {
+          STRINGS.dataQuality.measuredCard.note(
+            formatInt(quality.nodes_known),
+            formatInt(quality.nodes_total),
+          )
+        }
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.dataQuality.unmeasuredCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(quality.nodes_unknown)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.dataQuality.unmeasuredCard.note(formatInt(quality.groups.length))}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.dataQuality.partialCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(quality.partial_agencies.length)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.dataQuality.partialCard.note}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.dataQuality.unresolvedCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(quality.unresolved_refs.length)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.dataQuality.unresolvedCard.note}
+      </p>
+    </div>
+  </section>
+
+  <Callout tone="accent" class="mt-6" title={STRINGS.dataQuality.partialCalloutTitle}>
+    <p>{STRINGS.dataQuality.partialCallout}</p>
+    <p class="mt-2">
+      This build was produced from the <code>{manifest.source}</code> source
+      {manifest.run_id !== null && ` on sync run #${manifest.run_id}`}.
+    </p>
+  </Callout>
+
+  {/* ── by reason ─────────────────────────────────────────────────────────── */}
+  <section class="mt-10" aria-labelledby="reasons-heading">
+    <h2 id="reasons-heading" class="mb-3 text-lg font-semibold">
+      {STRINGS.dataQuality.reasonsHeading}
+    </h2>
+
+    {
+      quality.groups.length === 0 ? (
+        <p class="text-sm text-[color:var(--color-ink-muted)]">
+          {STRINGS.dataQuality.allMeasured}
+        </p>
+      ) : (
+        <div class="space-y-6">
+          {quality.groups.map((group) => (
+            <div class="card">
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 class="text-base font-semibold">
+                  {statusLabel(group.status)}
+                  <code class="ml-2 font-mono text-xs font-normal text-[color:var(--color-ink-subtle)]">
+                    {group.status}
+                  </code>
+                </h3>
+                <span class="badge badge-unknown">
+                  {STRINGS.dataQuality.nodeCount(formatInt(group.count))}
+                </span>
+              </div>
+
+              {statusExplanation(group.status) && (
+                <p class="mt-2 max-w-3xl text-sm text-[color:var(--color-ink-muted)]">
+                  {statusExplanation(group.status)}
+                </p>
+              )}
+
+              <h4 class="eyebrow mt-4">{STRINGS.dataQuality.reasonsRecorded}</h4>
+              <ul class="mt-1.5 space-y-1 text-sm">
+                {group.reasons.map((reason) => (
+                  <li class="flex items-baseline justify-between gap-4">
+                    <span class="text-[color:var(--color-ink-muted)]">{reason.reason}</span>
+                    <span class="figure shrink-0 text-xs">{formatInt(reason.count)}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {group.sample.length > 0 && (
+                <>
+                  <h4 class="eyebrow mt-4">
+                    {STRINGS.dataQuality.examples}
+                    {group.sample_truncated &&
+                      STRINGS.dataQuality.truncatedExamples(
+                        formatInt(group.sample.length),
+                        formatInt(group.count),
+                      )}
+                  </h4>
+                  <div class="table-wrap mt-1.5">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">{STRINGS.dataQuality.sampleColumns.citation}</th>
+                          <th scope="col">{STRINGS.dataQuality.sampleColumns.type}</th>
+                          <th scope="col">{STRINGS.dataQuality.sampleColumns.heading}</th>
+                          <th scope="col" class="num">{STRINGS.dataQuality.sampleColumns.title}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.sample.map((node) => (
+                          <tr>
+                            <th scope="row" class="font-mono text-xs font-normal">
+                              {node.citation}
+                            </th>
+                            <td>
+                              <span class="badge badge-neutral">{node.node_type}</span>
+                            </td>
+                            <td class="max-w-md">
+                              <span class="block truncate">
+                                {node.label ?? STRINGS.common.missingValue}
+                              </span>
+                            </td>
+                            <td class="num">
+                              <a href={route.title(node.title_number)}>{node.title_number}</a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {group.sample_truncated && (
+                    <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+                      The complete list of all {formatInt(group.count)} nodes is available from the
+                      <a href={route.apiPage()}> public API</a>; it is too long to render as a
+                      single page.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+  </section>
+
+  {/* ── by title ──────────────────────────────────────────────────────────── */}
+  {
+    quality.by_title.length > 0 && (
+      <section class="mt-10" aria-labelledby="titles-heading">
+        <h2 id="titles-heading" class="mb-3 text-lg font-semibold">
+          {STRINGS.dataQuality.byTitleHeading}
+        </h2>
+        <p class="mb-3 max-w-2xl text-sm text-[color:var(--color-ink-muted)]">
+          {STRINGS.dataQuality.byTitleIntro}
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col" class="num">{STRINGS.dataQuality.byTitleColumns.title}</th>
+                <th scope="col">{STRINGS.dataQuality.byTitleColumns.name}</th>
+                <th scope="col" class="num">{STRINGS.dataQuality.byTitleColumns.unmeasured}</th>
+                <th scope="col" class="num">{STRINGS.dataQuality.byTitleColumns.total}</th>
+                <th scope="col" class="num">{STRINGS.dataQuality.byTitleColumns.share}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quality.by_title.map((row) => (
+                <tr>
+                  <td class="num font-mono text-xs">
+                    <a href={route.title(row.title_number)}>{row.title_number}</a>
+                  </td>
+                  <th scope="row" class="font-normal">
+                    <a href={route.title(row.title_number)}>{row.title_name}</a>
+                  </th>
+                  <td class="num">{formatInt(row.unknown)}</td>
+                  <td class="num">{formatInt(row.total)}</td>
+                  <td class="num">
+                    {
+                      row.total > 0
+                        ? formatPct(row.unknown / row.total, 1)
+                        : STRINGS.common.missingValue
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+
+  {/* ── partial agencies ──────────────────────────────────────────────────── */}
+  {
+    quality.partial_agencies.length > 0 && (
+      <section class="mt-10" aria-labelledby="partial-heading">
+        <h2 id="partial-heading" class="mb-3 text-lg font-semibold">
+          {STRINGS.dataQuality.partialHeading}
+        </h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{STRINGS.dataQuality.partialColumns.agency}</th>
+                <th scope="col" class="num">{STRINGS.dataQuality.partialColumns.measured}</th>
+                <th scope="col">{STRINGS.dataQuality.partialColumns.coverage}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quality.partial_agencies.map((row) => (
+                <tr>
+                  <th scope="row" class="font-normal">
+                    <a href={route.agency(row.slug)}>{row.display_name}</a>
+                  </th>
+                  <td class="num">
+                    {formatInt(row.coverage.refs_counted)} / {formatInt(row.coverage.refs_total)}
+                  </td>
+                  <td><CoverageBadge coverage={row.coverage} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+
+  {/* ── unresolved refs ───────────────────────────────────────────────────── */}
+  {
+    quality.unresolved_refs.length > 0 && (
+      <section class="mt-10" aria-labelledby="unresolved-heading">
+        <h2 id="unresolved-heading" class="mb-3 text-lg font-semibold">
+          {STRINGS.dataQuality.unresolvedHeading}
+        </h2>
+        <p class="mb-3 max-w-2xl text-sm text-[color:var(--color-ink-muted)]">
+          {STRINGS.dataQuality.unresolvedIntro}
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{STRINGS.dataQuality.unresolvedColumns.citation}</th>
+                <th scope="col" class="font-mono">{STRINGS.dataQuality.unresolvedColumns.refKey}</th>
+                <th scope="col">{STRINGS.dataQuality.unresolvedColumns.claimedBy}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quality.unresolved_refs.map((row) => (
+                <tr>
+                  <th scope="row" class="whitespace-nowrap font-normal">{row.display}</th>
+                  <td class="font-mono text-xs">{row.ref_key}</td>
+                  <td>
+                    {row.agencies.map((agency, index) => (
+                      <>
+                        {index > 0 && ', '}
+                        <a href={route.agency(agency.slug)}>{agency.display_name}</a>
+                      </>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+</Base>

@@ -1,0 +1,35 @@
+---
+/**
+ * Ancestry trail. On the deeper pages this is the primary way back up the CFR hierarchy, so it
+ * is a real <nav> with an ordered list rather than a row of slashes.
+ */
+import { STRINGS } from '../constants/strings';
+
+interface Crumb {
+  label: string;
+  href?: string;
+}
+interface Props {
+  crumbs: Crumb[];
+}
+const { crumbs } = Astro.props;
+---
+
+<nav aria-label={STRINGS.a11y.breadcrumbNav} class="mb-4 text-xs">
+  <ol class="flex flex-wrap items-center gap-1.5 text-[color:var(--color-ink-subtle)]">
+    {
+      crumbs.map((crumb, index) => (
+        <li class="flex items-center gap-1.5">
+          {index > 0 && <span aria-hidden="true">/</span>}
+          {crumb.href ? (
+            <a href={crumb.href}>{crumb.label}</a>
+          ) : (
+            <span aria-current="page" class="text-[color:var(--color-ink-muted)]">
+              {crumb.label}
+            </span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</nav>

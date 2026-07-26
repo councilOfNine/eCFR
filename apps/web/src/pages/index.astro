@@ -1,0 +1,196 @@
+---
+import AgencyTable from '../components/AgencyTable.astro';
+import AmendmentTimeline from '../components/AmendmentTimeline.astro';
+import BarChart from '../components/BarChart.astro';
+import Callout from '../components/Callout.astro';
+import Stat from '../components/Stat.astro';
+import type { BarRow } from '../components/types';
+import WordCountView from '../components/WordCount.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { formatDate, formatInt, formatPct, isKnown, shareOf } from '../data/format';
+/**
+ * The dashboard.
+ *
+ * The headline is the DEDUPLICATED total, with the attributed total beside it and labelled. The
+ * predecessor published a single "corpus total" that was the sum of every agency's attributed
+ * count, which double- to sextuple-counted 17 shared scopes. Showing both, adjacent and named,
+ * is the fix: neither number is wrong, they answer different questions, and which one a reader
+ * wants depends on whether they are asking "who is responsible for this?" or "how does the CFR
+ * divide up?".
+ */
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+import Base from '../layouts/Base.astro';
+
+const data = await atlas();
+const { manifest } = data;
+const { corpus } = manifest;
+
+const agencies = await data.listAgencies();
+const shared = await data.listSharedScopes();
+const activity = await data.getAmendmentActivity();
+
+// Top agencies by deduplicated count. Unknowns are excluded from the ranking rather than placed
+// at the bottom: a bar chart is a claim about relative magnitude, and an unmeasured value has
+// none. They remain visible in the full table below, and on /data-quality.
+const ranked = agencies
+  .filter((a) => isKnown(a.deduplicated))
+  .sort((a, b) => (b.deduplicated.words ?? 0) - (a.deduplicated.words ?? 0));
+
+const topRows: BarRow[] = ranked.slice(0, 12).map((a) => ({
+  label: a.display_name,
+  href: route.agency(a.slug),
+  value: a.deduplicated,
+  ...(a.shared_refs > 0 ? { note: STRINGS.agencyTable.sharedBadge(a.shared_refs) } : {}),
+}));
+
+const unrankedCount = agencies.length - ranked.length;
+
+/**
+ * Shared words as a fraction of the CORPUS, not of the attributed total.
+ *
+ * `corpus.shared` counts each shared scope once; `corpus.deduplicated` is the conserved corpus
+ * total, which also counts each scope once. Those two are on the same footing, so the ratio is
+ * "this much of the CFR answers to more than one agency" — a statement about the corpus.
+ * Dividing by `attributed` instead compares a once-counted numerator against a denominator that
+ * counts shared scopes once per claimant, which is not a share of anything.
+ */
+const sharedShare = shareOf(corpus.shared, corpus.deduplicated);
+---
+
+<Base
+  title={SITE.name}
+  description={STRINGS.dashboard.description}
+  section="dashboard"
+>
+  <section class="mb-10">
+    <p class="eyebrow">{STRINGS.dashboard.eyebrow}</p>
+    <h1 class="mt-1 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">
+      {STRINGS.dashboard.heading}
+    </h1>
+    <p class="mt-3 max-w-2xl text-[color:var(--color-ink-muted)]">
+      {STRINGS.dashboard.intro}
+      {
+        manifest.source_date &&
+          STRINGS.dashboard.currentAsOf(formatDate(manifest.source_date))
+      }
+    </p>
+  </section>
+
+  {/* ── headline pair ─────────────────────────────────────────────────────── */}
+  <section class="grid gap-4 md:grid-cols-[3fr_2fr]" aria-labelledby="totals-heading">
+    <h2 id="totals-heading" class="visually-hidden">{STRINGS.dashboard.totalsHeading}</h2>
+
+    <div class="card">
+      <p class="eyebrow">{STRINGS.dashboard.deduplicated.eyebrow}</p>
+      <p class="mt-2">
+        <WordCountView value={corpus.deduplicated} variant="headline" showReason />
+      </p>
+      <p class="mt-3 max-w-lg text-sm text-[color:var(--color-ink-muted)]">
+        {STRINGS.dashboard.deduplicated.note}
+      </p>
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <div class="card">
+        <p class="eyebrow">{STRINGS.dashboard.attributed.eyebrow}</p>
+        <p class="mt-1"><WordCountView value={corpus.attributed} variant="lg" showReason /></p>
+        <p class="mt-2 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
+          A shared scope counted in full for every agency claiming it, so a scope with
+          <em>n</em> claimants lands in this total <em>n</em> times. That makes it larger than the
+          deduplicated figure by more than the shared words below — a scope shared six ways adds
+          five extra copies of itself, not one. Use it to ask what one agency is responsible for;
+          never sum it across agencies.
+        </p>
+      </div>
+      <div class="card">
+        <p class="eyebrow">{STRINGS.dashboard.shared.eyebrow}</p>
+        <p class="mt-1"><WordCountView value={corpus.shared} variant="lg" showReason /></p>
+        <p class="mt-2 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
+          {STRINGS.dashboard.shared.scopeCount(formatInt(corpus.shared_scopes))}
+          {sharedShare !== null && STRINGS.dashboard.shared.corpusShare(formatPct(sharedShare))}.
+          <a href={route.sharedJurisdiction()} class="ml-1">{STRINGS.dashboard.shared.link}</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* ── corpus shape ──────────────────────────────────────────────────────── */}
+  <section class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.dashboard.glanceLabel}>
+    <Stat label={STRINGS.dashboard.stats.agencies} value={formatInt(corpus.agencies)} href={route.agencyIndex()} />
+    <Stat
+      label={STRINGS.dashboard.stats.titles}
+      value={formatInt(corpus.titles)}
+      note={STRINGS.dashboard.stats.titlesNote(corpus.titles_reserved)}
+      href={route.titleIndex()}
+    />
+    <Stat
+      label={STRINGS.dashboard.stats.parts}
+      value={formatInt(corpus.parts)}
+      note={STRINGS.dashboard.stats.partsNote(formatInt(corpus.sections), formatInt(corpus.chapters))}
+    />
+    <Stat
+      label={STRINGS.dashboard.stats.unmeasured}
+      value={formatInt(corpus.nodes_unknown)}
+      note={STRINGS.dashboard.stats.unmeasuredNote(formatInt(corpus.structure_nodes))}
+      href={route.dataQuality()}
+    />
+  </section>
+
+  {/* ── ranking ───────────────────────────────────────────────────────────── */}
+  <section class="mt-10 grid gap-6 lg:grid-cols-[3fr_2fr]" aria-labelledby="top-heading">
+    <div>
+      <h2 id="top-heading" class="mb-3 text-lg font-semibold">{STRINGS.dashboard.rankingHeading}</h2>
+      {
+        topRows.length > 0 ? (
+          <BarChart rows={topRows} caption={STRINGS.dashboard.rankingCaption} />
+        ) : (
+          <Callout tone="unknown" title={STRINGS.dashboard.noRankingTitle}>
+            <p>
+              Every agency rollup is currently unmeasured, so there is nothing to rank. See
+              <a href={route.dataQuality()}> data quality</a> for the reasons.
+            </p>
+          </Callout>
+        )
+      }
+      {
+        unrankedCount > 0 && (
+          <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+            {formatInt(unrankedCount)} agencies are excluded from this ranking because their total
+            could not be measured. A bar chart is a claim about relative size, and an unmeasured
+            value does not have one. They appear in the table below and on
+            <a href={route.dataQuality()}> data quality</a>.
+          </p>
+        )
+      }
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <AmendmentTimeline series={activity} caption={STRINGS.dashboard.timelineCaption} />
+      {
+        shared.length > 0 && (
+          <Callout tone="shared" title={STRINGS.dashboard.sharedCalloutTitle}>
+            <p>
+              {formatInt(shared.length)} scopes answer to more than one agency. The largest is
+              <a href={route.sharedJurisdiction()} class="mx-1">{shared[0]?.display}</a>
+              with {shared[0]?.agencies.length} claimants.
+            </p>
+          </Callout>
+        )
+      }
+    </div>
+  </section>
+
+  {/* ── full table ────────────────────────────────────────────────────────── */}
+  <section class="mt-12" aria-labelledby="table-heading">
+    <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <h2 id="table-heading" class="text-lg font-semibold">{STRINGS.dashboard.allAgenciesHeading}</h2>
+      <p class="text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.dashboard.agencyCount(formatInt(agencies.length))}
+        <a href={route.methodology()} class="ml-1">{STRINGS.dashboard.howCountedLink}</a>
+      </p>
+    </div>
+    <AgencyTable agencies={agencies} />
+  </section>
+</Base>

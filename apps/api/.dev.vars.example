@@ -1,0 +1,61 @@
+# Local development environment for `wrangler dev`.
+#
+# Copy to `apps/api/.dev.vars` (git-ignored) and fill in. This file is the checked-in
+# inventory: every value `src/env.ts` declares appears below exactly once, with how it is set
+# in a real deployment. Bindings (DB, CONTENT, BURST_*) are NOT here — they come from
+# wrangler.jsonc, not from the environment.
+#
+# HOW EACH ONE IS SET IN A DEPLOYMENT
+#   plain var  — the `vars` block in wrangler.jsonc, per environment. Readable by anyone with
+#                the repository, so nothing sensitive goes there.
+#   secret     — `wrangler secret put <NAME> --config apps/api/wrangler.jsonc`, and again with
+#                `--env staging`, which is a separate Worker with a separate secret store.
+
+# ─── secrets ─────────────────────────────────────────────────────────────────
+
+# ANON_SALT — SECRET, REQUIRED IN EVERY ENVIRONMENT, minimum 16 characters.
+#
+# Salts the anonymous quota key, which is sha256(salt + client IP + UTC day). There is no
+# fallback in the source and the check is not conditional on ENVIRONMENT: without a secret salt
+# the key is derived from a public constant, a public date and a 32-bit address space, so a
+# third party can compute another client's quota bucket, and a leaked `api_usage_anon_day`
+# table can be brute-forced back to a list of IP addresses. A deployment missing it answers 500
+# on every anonymous request and logs `anon_salt_misconfigured` rather than metering dishonestly.
+#
+#     openssl rand -base64 32 | wrangler secret put ANON_SALT --config apps/api/wrangler.jsonc
+#     openssl rand -base64 32 | wrangler secret put ANON_SALT --env staging --config apps/api/wrangler.jsonc
+#
+# Rotating it only resets the current day's anonymous counters.
+ANON_SALT="replace-with-at-least-16-random-characters"
+
+# ADMIN_TOKEN — SECRET, OPTIONAL. Bearer token for POST /v1/account/tier, the operator-only
+# elevated-tier grant, presented in an `X-Admin-Token` header. While unset that route answers
+# 404 and the deployment has no privileged surface at all, so leave it out unless you need it.
+#     wrangler secret put ADMIN_TOKEN --config apps/api/wrangler.jsonc
+# ADMIN_TOKEN="optional"
+
+# ─── plain vars ──────────────────────────────────────────────────────────────
+
+# ENVIRONMENT — names the deployment. `production` and `staging` are the two values that
+# suppress verification tokens in logs and in the POST /v1/account/register response
+# (`isConfidentialEnvironment`, src/enums.ts); anything else is treated as a developer's
+# machine and the token is returned so registration is testable without a mail server.
+ENVIRONMENT="development"
+
+# SITE_ORIGIN — the one browser origin allowed to call /v1/account/* with credentials, and the
+# base for the emailed verification link. The read-only /v1 data routes are open to `*`; key
+# management is not. Empty means no clickable link is put in the verification email.
+SITE_ORIGIN="http://localhost:4321"
+
+# PUBLIC_CONTENT_BASE_URL — public base for R2-hosted part content. Empty means no public route
+# is configured and /v1/parts returns `content.url: null` rather than a URL that 404s.
+PUBLIC_CONTENT_BASE_URL=""
+
+# ECFR_USER_AGENT — sent on the only outbound calls this Worker makes (uncached /v1/diff).
+# eCFR asks for a descriptive string with a contact URL and rate-limits harder without one.
+# Falls back to DEFAULT_ECFR_USER_AGENT (src/constants/config.ts) when unset.
+ECFR_USER_AGENT="ecfr-atlas-dev/0.1 (+https://github.com/ecfr-atlas/ecfr-atlas; contact: ops@ecfr-atlas.org)"
+
+# DOCS_URL — the `docs` link stamped into every error body. Falls back to the relative /docs
+# path when unset, which is always valid, so this only matters once a public hostname exists.
+DOCS_URL="http://localhost:8787/docs"

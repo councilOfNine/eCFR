@@ -1,4 +1,46 @@
+# dependencies
 node_modules/
+.pnpm-store/
+
+# builds
 dist/
+.astro/
+*.tsbuildinfo
+
+# cloudflare / wrangler local state
+.wrangler/
+.dev.vars
+.dev.vars.*
+# ...but never the checked-in inventory of what those variables are. A `.dev.vars.staging`
+# holds real secrets and must never be committable; `.dev.vars.example` holds only names and
+# prose, and a rule that hides the documentation along with the secrets is how a REQUIRED
+# secret goes undocumented until a deployment fails. Same shape as `!.env.example` below.
+!.dev.vars.example
+
+# sqlite — the sidecars matter as much as the db itself
 *.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# sync working directory (multi-hundred-MB XML scratch space)
+.sync-cache/
+sync-output/
+
+# env & secrets
 .env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test output
+coverage/
+
+# fixture build scratch — raw eCFR responses, up to ~40 MB per title.
+# The reviewable output (seed.sql, content/, xml/, manifest.json) IS committed.
+fixtures/raw/

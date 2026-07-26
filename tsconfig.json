@@ -1,0 +1,26 @@
+{
+  // Solution-style root. `pnpm typecheck` runs `tsc --build` against this and nothing else, so
+  // every project that must typecheck has to be reachable from here.
+  //
+  // `files: []` is required, not stylistic: without it tsc treats this as an ordinary project,
+  // globs the whole repository, and typechecks apps/web's .astro output twice with the wrong
+  // compiler options.
+  //
+  // apps/web is deliberately absent. It extends `astro/tsconfigs/strict` rather than
+  // tsconfig.base.json, and half its types do not exist until `astro sync` has generated them,
+  // so pulling it in here would fail on the .astro compiler's output rather than on anything a
+  // contributor wrote. It is covered instead by `astro check` (`pnpm --filter @ecfr-atlas/web
+  // typecheck`), which CI runs as its own step immediately after this one. Both have to run:
+  // neither alone covers the whole repository.
+  //
+  // packages/db is also absent, and for a different reason — it has no TypeScript. It is the
+  // schema package: migrations plus the tests that prove the CHECK constraints hold. Its tests
+  // are compiled by tsconfig.tests.json below, along with every other test in the repo.
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/ecfr" },
+    { "path": "apps/api" },
+    { "path": "tsconfig.tests.json" }
+  ]
+}

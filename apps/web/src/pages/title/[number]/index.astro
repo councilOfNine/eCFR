@@ -1,0 +1,198 @@
+---
+import { ecfrUrl } from '@ecfr-atlas/core';
+/**
+ * One CFR title, with its chapter list. 49 non-reserved titles plus the reserved one.
+ */
+import type { GetStaticPaths } from 'astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import Callout from '../../../components/Callout.astro';
+import PageHeader from '../../../components/PageHeader.astro';
+import WordCountView from '../../../components/WordCount.astro';
+import { STRINGS } from '../../../constants/strings';
+import { formatDate, formatInt } from '../../../data/format';
+import { atlas } from '../../../data/load';
+import * as route from '../../../data/routes';
+import Base from '../../../layouts/Base.astro';
+
+export const getStaticPaths = (async () => {
+  const { titles } = await (await atlas()).routes();
+  return titles.map((number) => ({ params: { number: String(number) } }));
+}) satisfies GetStaticPaths;
+
+const data = await atlas();
+const titleNumber = Number.parseInt(Astro.params.number ?? '', 10);
+const title = Number.isNaN(titleNumber) ? null : await data.getTitle(titleNumber);
+
+if (!title) {
+  throw new Error(
+    `build: /title/${Astro.params.number ?? ''} was routed but getTitle() returned null.`,
+  );
+}
+
+/** Chapters that belong to a subtitle, so the ungrouped list does not repeat them. */
+const grouped = new Set(title.subtitles.flatMap((s) => s.chapters));
+const ungrouped = title.chapter_list.filter((c) => !grouped.has(c.identifier));
+const chapterBy = new Map(title.chapter_list.map((c) => [c.identifier, c]));
+---
+
+<Base
+  title={STRINGS.titlePage.title(title.number, title.name)}
+  description={STRINGS.titlePage.description(title.number, title.name)}
+  section="titles"
+>
+  <Breadcrumbs
+    crumbs={[
+      { label: STRINGS.titlePage.breadcrumbRoot, href: route.titleIndex() },
+      { label: STRINGS.titlePage.breadcrumbTitle(title.number) },
+    ]}
+  />
+
+  <PageHeader eyebrow={STRINGS.titlePage.breadcrumbTitle(title.number)} title={title.name}>
+    <div slot="aside" class="text-right text-xs text-[color:var(--color-ink-subtle)]">
+      <a href={ecfrUrl({ title: title.number })} rel="external noopener">
+        {STRINGS.common.readOnEcfrLink}
+      </a>
+    </div>
+  </PageHeader>
+
+  {
+    title.reserved && (
+      <Callout tone="neutral" class="mb-6" title={STRINGS.titlePage.reservedCalloutTitle}>
+        <p>{STRINGS.titlePage.reservedCallout(title.number)}</p>
+      </Callout>
+    )
+  }
+
+  <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.titlePage.summaryLabel}>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.titlePage.words}</p>
+      <p class="mt-1"><WordCountView value={title.word_count} variant="lg" showReason /></p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.titlePage.structure}</p>
+      <p class="figure figure-lg mt-1">{formatInt(title.chapters)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.titlePage.structureNote(formatInt(title.parts), formatInt(title.sections))}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.titlePage.lastAmended}</p>
+      <p class="figure figure-lg mt-1 text-[1.1rem]">
+        {
+          title.latest_amended_on
+            ? formatDate(title.latest_amended_on)
+            : STRINGS.common.missingValue
+        }
+      </p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.titlePage.issued}
+        {
+          title.latest_issue_date
+            ? formatDate(title.latest_issue_date)
+            : STRINGS.common.missingValue
+        }
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.titlePage.agencies}</p>
+      <p class="figure figure-lg mt-1">{formatInt(title.agencies.length)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.titlePage.agenciesNote}
+      </p>
+    </div>
+  </section>
+
+  {
+    title.agencies.length > 0 && (
+      <section class="mt-6" aria-labelledby="agencies-heading">
+        <h2 id="agencies-heading" class="eyebrow mb-2">
+          {STRINGS.titlePage.administeredBy}
+        </h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {title.agencies.map((agency) => (
+            <li>
+              <a href={route.agency(agency.slug)} class="badge badge-accent no-underline">
+                {agency.display_name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  <section class="mt-10" aria-labelledby="chapters-heading">
+    <h2 id="chapters-heading" class="mb-3 text-lg font-semibold">
+      {STRINGS.titlePage.chaptersHeading}
+    </h2>
+
+    {
+      title.chapter_list.length === 0 ? (
+        <p class="text-sm text-[color:var(--color-ink-muted)]">{STRINGS.titlePage.noChapters}</p>
+      ) : (
+        <div class="space-y-8">
+          {title.subtitles.map((subtitle) => (
+            <div>
+              <h3 class="mb-2 text-sm font-semibold text-[color:var(--color-ink-muted)]">
+                {STRINGS.titlePage.subtitleHeading(subtitle.identifier, subtitle.label)}
+              </h3>
+              <ul class="grid gap-3 md:grid-cols-2">
+                {subtitle.chapters
+                  .map((id) => chapterBy.get(id))
+                  .filter((chapter) => chapter !== undefined)
+                  .map((chapter) => (
+                    <li class="card card-tight">
+                      <a href={route.chapter(title.number, chapter.identifier)} class="font-medium">
+                        {STRINGS.titlePage.chapterLink(chapter.identifier, chapter.label)}
+                      </a>
+                      <p class="mt-1 flex items-baseline justify-between gap-3 text-sm">
+                        <WordCountView value={chapter.word_count} />
+                        <span class="text-xs text-[color:var(--color-ink-subtle)]">
+                          {STRINGS.titlePage.partCount(formatInt(chapter.parts))}
+                        </span>
+                      </p>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+
+          {ungrouped.length > 0 && (
+            <ul class="grid gap-3 md:grid-cols-2">
+              {ungrouped.map((chapter) => (
+                <li class="card card-tight">
+                  <div class="flex items-start justify-between gap-3">
+                    <a href={route.chapter(title.number, chapter.identifier)} class="font-medium">
+                      {STRINGS.titlePage.chapterLink(chapter.identifier, chapter.label)}
+                    </a>
+                    {
+                      chapter.reserved && (
+                        <span class="badge badge-neutral">{STRINGS.common.reservedBadge}</span>
+                      )
+                    }
+                  </div>
+                  <p class="mt-1 flex items-baseline justify-between gap-3 text-sm">
+                    <WordCountView value={chapter.word_count} />
+                    <span class="text-xs text-[color:var(--color-ink-subtle)]">
+                      {STRINGS.titlePage.partCount(formatInt(chapter.parts))}
+                    </span>
+                  </p>
+                  {chapter.agencies.length > 0 && (
+                    <p class="mt-1.5 text-xs text-[color:var(--color-ink-subtle)]">
+                      {chapter.agencies.map((agency, index) => (
+                        <>
+                          {index > 0 && ' · '}
+                          <a href={route.agency(agency.slug)}>{agency.display_name}</a>
+                        </>
+                      ))}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )
+    }
+  </section>
+</Base>

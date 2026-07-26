@@ -1,0 +1,28 @@
+---
+/**
+ * Title block shared by every content page: eyebrow, heading, optional standfirst, and a slot
+ * for the citation/link controls that sit alongside it.
+ */
+interface Props {
+  eyebrow?: string;
+  title: string;
+  standfirst?: string;
+}
+const { eyebrow, title, standfirst } = Astro.props;
+---
+
+<header class="mb-6">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+      {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+      <h1 class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+      {
+        standfirst && (
+          <p class="mt-2 max-w-2xl text-sm text-[color:var(--color-ink-muted)]">{standfirst}</p>
+        )
+      }
+    </div>
+    <div class="shrink-0"><slot name="aside" /></div>
+  </div>
+  <slot />
+</header>

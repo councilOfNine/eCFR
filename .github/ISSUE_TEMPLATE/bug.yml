@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in the site, the API, or the tooling does not work.
+title: 'Bug: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a **number** looks wrong rather than the software being broken, please use the
+        [Data looks wrong](?template=data-error.yml) template instead — it asks for different
+        information and is triaged differently.
+
+        For a security vulnerability, do not open an issue at all. See
+        [SECURITY.md](../blob/HEAD/SECURITY.md).
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does this happen?
+      options:
+        - The website
+        - The public API
+        - The OpenAPI docs
+        - Local development (pnpm install / db:reset / dev:web)
+        - The sync pipeline or CI
+        - The nightly data export
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        1. Went to …
+        2. Clicked …
+        3. Expected …, but saw …
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Error output, console log, or screenshot
+      description: >-
+        Paste the full error rather than the last line — the stack usually matters. Formatting
+        into a code block is automatic.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      description: The page or endpoint, if applicable.
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        For a site or API bug: browser and OS. For a local-development bug: the output of
+        `node -v`, `pnpm -v`, and your OS.
+      placeholder: |
+        Firefox 141 on macOS 15
+        — or —
+        node v22.14.0, pnpm 10.10.0, Ubuntu 24.04
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues.
+          required: false
+        - label: >-
+            For a local-development bug: I ran `pnpm install` with the pnpm version from
+            `packageManager` and Node from `.nvmrc`.
+          required: false

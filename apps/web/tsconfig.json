@@ -1,0 +1,18 @@
+{
+  // Astro ships its own base config; it sets jsx/moduleResolution/types the way the .astro
+  // compiler needs them. We layer the repo's strictness on top rather than extending
+  // tsconfig.base.json, which targets plain library builds and would fight Astro's defaults.
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [".astro/types.d.ts", "env.d.ts", "src/**/*", "scripts/**/*", "astro.config.ts"],
+  "exclude": ["dist", ".astro"]
+}

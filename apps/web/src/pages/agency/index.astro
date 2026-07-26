@@ -1,0 +1,37 @@
+---
+import AgencyTable from '../../components/AgencyTable.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import { STRINGS } from '../../constants/strings';
+import { formatInt } from '../../data/format';
+/**
+ * The full agency list. Same table component as the dashboard, without the surrounding analysis
+ * — this is the page you land on from a search engine looking for one specific agency.
+ */
+import { atlas } from '../../data/load';
+import * as route from '../../data/routes';
+import Base from '../../layouts/Base.astro';
+
+const data = await atlas();
+const agencies = await data.listAgencies();
+const parents = agencies.filter((a) => a.parent_slug === null).length;
+---
+
+<Base
+  title={STRINGS.agencyIndex.title}
+  description={STRINGS.agencyIndex.description}
+  section="agencies"
+>
+  <PageHeader
+    eyebrow={STRINGS.agencyIndex.eyebrow}
+    title={STRINGS.agencyIndex.title}
+    standfirst={STRINGS.agencyIndex.standfirst(formatInt(agencies.length), formatInt(parents))}
+  />
+
+  <AgencyTable agencies={agencies} caption={STRINGS.agencyIndex.caption} />
+
+  <p class="mt-4 text-sm text-[color:var(--color-ink-muted)]">
+    Looking for a scope rather than an agency? Browse by
+    <a href={route.titleIndex()}>CFR title</a>, or see the
+    <a href={route.sharedJurisdiction()}>scopes with more than one claimant</a>.
+  </p>
+</Base>

@@ -1,0 +1,233 @@
+---
+/**
+ * The agency table.
+ *
+ * Server-rendered complete and already sorted; the script is a progressive enhancement that
+ * re-sorts and filters rows in place. With JS off you get a full, correctly ordered table — no
+ * skeleton, no empty state, no fetch. That is the whole reason this page can hit the 795 ms LCP
+ * the static version measured instead of the SPA's 3,081 ms.
+ *
+ * The sort's one non-obvious rule: unknown values sort LAST in both directions. They are not
+ * zero and they are not infinity; ranking them as either would put "we couldn't measure this"
+ * in a position that implies a magnitude.
+ */
+import { STRINGS } from '../constants/strings';
+import type { AgencyRow } from '../data/contract';
+import { formatInt, isKnown } from '../data/format';
+import * as route from '../data/routes';
+import CoverageBadge from './CoverageBadge.astro';
+import WordCountView from './WordCount.astro';
+
+interface Props {
+  agencies: AgencyRow[];
+  caption?: string;
+  /** Show the parent/child indent. Off for filtered subsets where it would be misleading. */
+  showHierarchy?: boolean;
+}
+
+const {
+  agencies,
+  caption = STRINGS.agencyTable.defaultCaption,
+  showHierarchy = true,
+} = Astro.props;
+
+const rows = [...agencies].sort((a, b) => {
+  const av = a.deduplicated.words;
+  const bv = b.deduplicated.words;
+  if (av === null && bv === null) return a.sortable_name.localeCompare(b.sortable_name);
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  return bv - av;
+});
+
+/** `null` omits the attribute entirely; the script reads its absence as "unknown". */
+const sortValue = (n: number | null): string | undefined => (n === null ? undefined : String(n));
+
+const unmeasured = rows.filter((a) => !isKnown(a.deduplicated)).length;
+---
+
+{/*
+  The filter strings ride on data attributes rather than being imported by the client script:
+  importing the strings module there would bundle the site's whole copy into browser JS. The
+  status line is a token pattern the script substitutes, so the sentence stays whole here.
+*/}
+<div
+  class="table-wrap"
+  data-agency-table
+  data-filter-placeholder={STRINGS.agencyTable.filterPlaceholder}
+  data-filter-label={STRINGS.agencyTable.filterLabel}
+  data-filter-status={STRINGS.agencyTable.filterStatusPattern}
+>
+  <table class="data-table" id="agency-table">
+    <caption class="visually-hidden">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col" data-sort-key="name" data-sort-type="text">{STRINGS.agencyTable.columns.agency}</th>
+        <th scope="col" class="num" data-sort-key="dedup" data-sort-type="number" data-sort-default>
+          {STRINGS.agencyTable.columns.deduplicated}
+        </th>
+        <th scope="col" class="num" data-sort-key="attributed" data-sort-type="number">
+          {STRINGS.agencyTable.columns.attributed}
+        </th>
+        <th scope="col" class="num" data-sort-key="scopes" data-sort-type="number">{STRINGS.agencyTable.columns.scopes}</th>
+        <th scope="col" data-sort-key="coverage" data-sort-type="number">{STRINGS.agencyTable.columns.coverage}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((agency) => (
+          <tr data-name={agency.display_name.toLowerCase()}>
+            <th scope="row" class="font-normal" data-sort-value={agency.sortable_name}>
+              <span
+                class="flex items-baseline gap-1.5"
+                style={showHierarchy && agency.depth > 0 ? `padding-left:${agency.depth}rem` : undefined}
+              >
+                {showHierarchy && agency.depth > 0 && (
+                  <span aria-hidden="true" class="text-[color:var(--color-ink-subtle)]">
+                    ↳
+                  </span>
+                )}
+                <a href={route.agency(agency.slug)}>{agency.display_name}</a>
+                {agency.shared_refs > 0 && (
+                  <span
+                    class="badge badge-shared"
+                    title={STRINGS.agencyTable.sharedBadgeTitle(agency.shared_refs)}
+                  >
+                    {STRINGS.agencyTable.sharedBadge(agency.shared_refs)}
+                  </span>
+                )}
+              </span>
+            </th>
+            <td class="num" data-sort-value={sortValue(agency.deduplicated.words)}>
+              <WordCountView value={agency.deduplicated} />
+            </td>
+            <td class="num" data-sort-value={sortValue(agency.attributed.words)}>
+              <WordCountView value={agency.attributed} />
+            </td>
+            <td class="num" data-sort-value={String(agency.coverage.refs_total)}>
+              {formatInt(agency.coverage.refs_total)}
+            </td>
+            <td data-sort-value={String(agency.coverage.pct)}>
+              <CoverageBadge coverage={agency.coverage} />
+            </td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+
+<p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+  {STRINGS.agencyTable.sortNote}
+  {
+    unmeasured > 0 &&
+      ` ${STRINGS.agencyTable.unmeasuredNote(formatInt(unmeasured), formatInt(rows.length))}`
+  }
+</p>
+
+<script>
+  /**
+   * Sort/filter enhancement. ~60 lines, no dependencies, attached only if the table exists.
+   *
+   * Rows carry their sort keys as `data-sort-value` attributes written at build time, so the
+   * script never parses formatted text — parsing "1,284,512" back into a number is how a sort
+   * silently starts ordering by string length.
+   */
+  type SortType = 'text' | 'number';
+
+  for (const wrap of document.querySelectorAll<HTMLElement>('[data-agency-table]')) {
+    const table = wrap.querySelector('table');
+    const tbody = table?.querySelector('tbody');
+    if (!table || !tbody) continue;
+
+    const headers = [...table.querySelectorAll<HTMLTableCellElement>('thead th[data-sort-key]')];
+    const allRows = [...tbody.querySelectorAll<HTMLTableRowElement>('tr')];
+
+    // ── filter box, injected here so a no-JS reader never sees a dead input ──
+    const filterWrap = document.createElement('div');
+    filterWrap.className = 'mb-2 flex items-center gap-2';
+    const input = document.createElement('input');
+    input.type = 'search';
+    input.placeholder = wrap.dataset.filterPlaceholder ?? '';
+    input.className =
+      'w-full max-w-xs rounded border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-2.5 py-1.5 text-sm';
+    const label = document.createElement('label');
+    label.className = 'visually-hidden';
+    label.textContent = wrap.dataset.filterLabel ?? '';
+    const id = `filter-${Math.random().toString(36).slice(2, 8)}`;
+    input.id = id;
+    label.htmlFor = id;
+    const status = document.createElement('span');
+    status.className = 'text-xs text-[color:var(--color-ink-subtle)]';
+    status.setAttribute('role', 'status');
+    filterWrap.append(label, input, status);
+    wrap.parentElement?.insertBefore(filterWrap, wrap);
+
+    const statusPattern = wrap.dataset.filterStatus ?? '{shown} of {total}';
+    input.addEventListener('input', () => {
+      const needle = input.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of allRows) {
+        const match = needle === '' || (row.dataset.name ?? '').includes(needle);
+        row.hidden = !match;
+        if (match) shown++;
+      }
+      status.textContent =
+        needle === ''
+          ? ''
+          : statusPattern.replace('{shown}', String(shown)).replace('{total}', String(allRows.length));
+    });
+
+    // ── sorting ──
+    const cellValue = (row: HTMLTableRowElement, index: number): string | undefined =>
+      row.children[index]?.getAttribute('data-sort-value') ?? undefined;
+
+    let activeIndex = headers.findIndex((h) => h.hasAttribute('data-sort-default'));
+    let descending = true;
+
+    const sortBy = (index: number, desc: boolean) => {
+      const type = (headers[index]?.dataset.sortType ?? 'text') as SortType;
+      const sorted = [...allRows].sort((a, b) => {
+        const av = cellValue(a, index);
+        const bv = cellValue(b, index);
+        // Unknown last, always. Not zero, not infinity — outside the ordering entirely.
+        if (av === undefined && bv === undefined) return 0;
+        if (av === undefined) return 1;
+        if (bv === undefined) return -1;
+        const cmp =
+          type === 'number' ? Number(av) - Number(bv) : av.localeCompare(bv, 'en');
+        return desc ? -cmp : cmp;
+      });
+      for (const row of sorted) tbody.append(row);
+
+      headers.forEach((header, i) => {
+        const button = header.querySelector('button');
+        if (!button) return;
+        const state = i === index ? (desc ? 'descending' : 'ascending') : 'none';
+        header.setAttribute('aria-sort', state);
+        button.setAttribute('aria-sort', state);
+      });
+    };
+
+    headers.forEach((header, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sort-btn';
+      button.textContent = header.textContent?.trim() ?? '';
+      button.setAttribute('aria-sort', 'none');
+      header.textContent = '';
+      header.append(button);
+
+      button.addEventListener('click', () => {
+        // Re-clicking the active column flips it; a new column starts descending for numbers
+        // (biggest first is what anyone wants) and ascending for text.
+        if (activeIndex === index) descending = !descending;
+        else descending = (header.dataset.sortType ?? 'text') === 'number';
+        activeIndex = index;
+        sortBy(index, descending);
+      });
+    });
+
+    if (activeIndex >= 0) sortBy(activeIndex, true);
+  }
+</script>

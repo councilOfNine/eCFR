@@ -1,0 +1,18 @@
+{
+  "generated_by": "scripts/build-fixtures.ts",
+  "source": "https://www.ecfr.gov",
+  "source_date": "2026-07-23",
+  "fixture_titles": [1, 3, 12],
+  "counts": {
+    "titles": 50,
+    "agencies": 316,
+    "references": 487,
+    "structure_nodes": 9262,
+    "measured_nodes": 9257,
+    "unmeasured_nodes": 5,
+    "overlaps": 17,
+    "amendments": 890,
+    "rendered_parts": 30
+  },
+  "seed_bytes": 2947658
+}

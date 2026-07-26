@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // Workers types supply fetch/Request/Response/crypto/console; the base lib is ES2023 only
+    // so nothing accidentally compiles against a DOM API the runtime does not have.
+    "types": ["@cloudflare/workers-types"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../packages/core" }]
+}

@@ -1,0 +1,40 @@
+---
+/**
+ * One figure with its label and, where the figure is derived, a one-line note on what it means.
+ * The note is not decoration: "attributed" and "deduplicated" differ by 17 shared scopes and a
+ * reader who does not know which they are looking at has been misled by omission.
+ */
+import type { WordCount } from '@ecfr-atlas/core/api-schemas';
+import { STRINGS } from '../constants/strings';
+import type { WordCountVariant } from './types';
+import WordCountView from './WordCount.astro';
+
+interface Props {
+  label: string;
+  value: WordCount | string;
+  note?: string;
+  /** Compact is for chart labels; a stat card always has room for the full figure. */
+  variant?: Exclude<WordCountVariant, 'compact'>;
+  href?: string;
+}
+
+const { label, value, note, variant = 'lg', href } = Astro.props;
+const isMeasurement = typeof value !== 'string';
+---
+
+<div class="card">
+  <p class="eyebrow">{label}</p>
+  <p class="mt-1.5">
+    {
+      isMeasurement ? (
+        <WordCountView value={value} variant={variant} />
+      ) : (
+        <span class:list={['figure', variant === 'headline' ? 'figure-headline' : 'figure-lg']}>
+          {value}
+        </span>
+      )
+    }
+  </p>
+  {note && <p class="mt-2 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">{note}</p>}
+  {href && <p class="mt-2 text-xs"><a href={href}>{STRINGS.common.detailsLink}</a></p>}
+</div>

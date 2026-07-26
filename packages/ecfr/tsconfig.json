@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // This package runs in Node (scripts/sync) and is also imported by the /diff Worker
+    // route. Pinning `types` to node keeps the two global `fetch`/`Response` declarations
+    // (@types/node's undici and @cloudflare/workers-types) from being merged into one
+    // conflicting global. The code only uses the structurally-common subset of both.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../core" }]
+}

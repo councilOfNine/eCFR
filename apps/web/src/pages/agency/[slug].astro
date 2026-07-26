@@ -1,0 +1,260 @@
+---
+/**
+ * Agency detail. 316 of these.
+ *
+ * The scope table is the substance of the page. Each row shows the citation at the level the
+ * reference ACTUALLY names — a reference carrying both a chapter and a part is a part-level
+ * reference, and rendering it as the chapter is what credited one agency 12.7x its real words.
+ * `narrowest_level` comes straight from core's `narrowestLevel()`, so the site and the pipeline
+ * cannot hold different opinions about it.
+ */
+import type { GetStaticPaths } from 'astro';
+import AmendmentTimeline from '../../components/AmendmentTimeline.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import Callout from '../../components/Callout.astro';
+import CoverageBadge from '../../components/CoverageBadge.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import WordCountView from '../../components/WordCount.astro';
+import { STRINGS } from '../../constants/strings';
+import { formatInt, isKnown } from '../../data/format';
+import { atlas } from '../../data/load';
+import * as route from '../../data/routes';
+import Base from '../../layouts/Base.astro';
+
+export const getStaticPaths = (async () => {
+  const { agencies } = await (await atlas()).routes();
+  return agencies.map((slug) => ({ params: { slug } }));
+}) satisfies GetStaticPaths;
+
+const { slug } = Astro.params;
+const data = await atlas();
+const agency = slug ? await data.getAgency(slug) : null;
+
+// getStaticPaths only emits slugs the source enumerated, so a miss here is a build-time
+// inconsistency between routes() and getAgency(), not a user-facing 404. Fail loudly.
+if (!agency) {
+  throw new Error(
+    `build: /agency/${slug ?? ''} was routed but getAgency() returned null. routes() and ` +
+      'getAgency() disagree about which agencies exist.',
+  );
+}
+
+const sharedScopes = agency.scopes.filter((scope) => scope.shared_with.length > 0);
+const unresolved = agency.scopes.filter((scope) => scope.node_citation === null);
+const measuredScopes = agency.scopes.filter((scope) => isKnown(scope.word_count)).length;
+---
+
+<Base
+  title={agency.display_name}
+  description={STRINGS.agencyDetail.description(agency.display_name)}
+  section="agencies"
+>
+  <Breadcrumbs
+    crumbs={[
+      { label: STRINGS.agencyDetail.breadcrumbRoot, href: route.agencyIndex() },
+      ...(agency.parent
+        ? [{ label: agency.parent.display_name, href: route.agency(agency.parent.slug) }]
+        : []),
+      { label: agency.display_name },
+    ]}
+  />
+
+  <PageHeader
+    eyebrow={
+      agency.parent
+        ? STRINGS.agencyDetail.subAgencyEyebrow(agency.parent.display_name)
+        : STRINGS.agencyDetail.agencyEyebrow
+    }
+    title={agency.display_name}
+    standfirst={agency.name !== agency.display_name ? agency.name : undefined}
+  >
+    <div slot="aside" class="flex flex-col items-end gap-1.5">
+      <CoverageBadge coverage={agency.coverage} />
+      {agency.short_name && <span class="badge badge-neutral">{agency.short_name}</span>}
+    </div>
+  </PageHeader>
+
+  {/* ── totals ────────────────────────────────────────────────────────────── */}
+  <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.agencyDetail.cardsLabel}>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.agencyDetail.deduplicated.eyebrow}</p>
+      <p class="mt-1"><WordCountView value={agency.deduplicated} variant="lg" showReason /></p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.agencyDetail.deduplicated.note}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.agencyDetail.attributed.eyebrow}</p>
+      <p class="mt-1"><WordCountView value={agency.attributed} variant="lg" showReason /></p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.agencyDetail.attributed.note}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.agencyDetail.subtree.eyebrow}</p>
+      <p class="mt-1"><WordCountView value={agency.subtree_deduplicated} variant="lg" showReason /></p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {
+          agency.children_count === 0
+            ? STRINGS.agencyDetail.subtree.noChildren
+            : STRINGS.agencyDetail.subtree.rolledUp(formatInt(agency.children_count))
+        }
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.agencyDetail.scopes.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(agency.coverage.refs_total)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.agencyDetail.scopes.measured(formatInt(measuredScopes))}{
+          agency.shared_refs > 0 &&
+            STRINGS.agencyDetail.scopes.shared(formatInt(agency.shared_refs))
+        }.
+      </p>
+    </div>
+  </section>
+
+  {/* ── shared jurisdiction callout ───────────────────────────────────────── */}
+  {
+    sharedScopes.length > 0 && (
+      <Callout tone="shared" title={STRINGS.agencyDetail.sharedCalloutTitle} class="mt-6">
+        <p>{STRINGS.agencyDetail.sharedCallout(formatInt(sharedScopes.length))}</p>
+        <ul class="mt-2 space-y-1">
+          {sharedScopes.map((scope) => (
+            <li>
+              <a href={route.scopeHref(scope)}>{scope.display}</a>
+              <span class="text-[color:var(--color-ink-muted)]">
+                {' '}{STRINGS.agencyDetail.sharedWith}{' '}
+                {scope.shared_with.map((other, index) => (
+                  <>
+                    {index > 0 && ', '}
+                    <a href={route.agency(other.slug)}>{other.display_name}</a>
+                  </>
+                ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p class="mt-2">
+          <a href={route.sharedJurisdiction()}>{STRINGS.agencyDetail.allSharedLink}</a>
+        </p>
+      </Callout>
+    )
+  }
+
+  {
+    unresolved.length > 0 && (
+      <Callout tone="unknown" title={STRINGS.agencyDetail.unresolvedCalloutTitle} class="mt-4">
+        <p>
+          {formatInt(unresolved.length)} of this agency's references point at a scope that is not
+          present in the current CFR structure, so it cannot be measured. These are listed on
+          <a href={route.dataQuality()}> data quality</a> rather than quietly dropped.
+        </p>
+      </Callout>
+    )
+  }
+
+  {/* ── scopes ────────────────────────────────────────────────────────────── */}
+  <section class="mt-10" aria-labelledby="scopes-heading">
+    <h2 id="scopes-heading" class="mb-3 text-lg font-semibold">
+      {STRINGS.agencyDetail.scopesHeading}
+    </h2>
+    {
+      agency.scopes.length === 0 ? (
+        <p class="text-sm text-[color:var(--color-ink-muted)]">{STRINGS.agencyDetail.noScopes}</p>
+      ) : (
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{STRINGS.agencyDetail.columns.citation}</th>
+                <th scope="col">{STRINGS.agencyDetail.columns.scope}</th>
+                <th scope="col">{STRINGS.agencyDetail.columns.level}</th>
+                <th scope="col" class="num">{STRINGS.agencyDetail.columns.words}</th>
+                <th scope="col">{STRINGS.agencyDetail.columns.alsoAdministered}</th>
+                <th scope="col">{STRINGS.agencyDetail.columns.officialText}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agency.scopes.map((scope) => (
+                <tr>
+                  <th scope="row" class="whitespace-nowrap font-normal">
+                    <a href={route.scopeHref(scope)}>{scope.display}</a>
+                  </th>
+                  <td class="max-w-sm">
+                    {scope.label ?? (
+                      <span class="text-[color:var(--color-ink-subtle)]">
+                        {STRINGS.agencyDetail.unresolvedScope}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span class="badge badge-neutral">{scope.narrowest_level}</span>
+                  </td>
+                  <td class="num"><WordCountView value={scope.word_count} /></td>
+                  <td>
+                    {scope.shared_with.length === 0 ? (
+                      <span class="text-[color:var(--color-ink-subtle)]">
+                        {STRINGS.common.missingValue}
+                      </span>
+                    ) : (
+                      scope.shared_with.map((other, index) => (
+                        <>
+                          {index > 0 && ', '}
+                          <a href={route.agency(other.slug)}>{other.display_name}</a>
+                        </>
+                      ))
+                    )}
+                  </td>
+                  <td>
+                    <a href={scope.ecfr_url} rel="external noopener">{STRINGS.common.ecfrLink}</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+      {STRINGS.agencyDetail.levelNote}
+    </p>
+  </section>
+
+  {/* ── sub-agencies ──────────────────────────────────────────────────────── */}
+  {
+    agency.children.length > 0 && (
+      <section class="mt-10" aria-labelledby="children-heading">
+        <h2 id="children-heading" class="mb-3 text-lg font-semibold">
+          {STRINGS.agencyDetail.childrenHeading}
+        </h2>
+        <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {agency.children.map((child) => (
+            <li class="card card-tight">
+              <a href={route.agency(child.slug)} class="font-medium">
+                {child.display_name}
+              </a>
+              <p class="mt-1 flex items-baseline justify-between gap-2 text-sm">
+                <WordCountView value={child.deduplicated} />
+                <CoverageBadge coverage={child.coverage} hideWhenComplete />
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  {/* ── activity ──────────────────────────────────────────────────────────── */}
+  <section class="mt-10" aria-labelledby="activity-heading">
+    <h2 id="activity-heading" class="mb-3 text-lg font-semibold">
+      {STRINGS.agencyDetail.activityHeading}
+    </h2>
+    <AmendmentTimeline
+      series={agency.amendments}
+      caption={STRINGS.agencyDetail.activityCaption(agency.display_name)}
+    />
+    <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+      {STRINGS.agencyDetail.activityNote}
+    </p>
+  </section>
+</Base>

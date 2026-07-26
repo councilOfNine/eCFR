@@ -1,0 +1,25 @@
+{
+  "dist": "/Users/miketorres/Code/USDS/apps/web/dist/client",
+  "checkedAt": "2026-07-26T08:20:37.031Z",
+  "fileCount": 26,
+  "maxFiles": 18000,
+  "cloudflareFreePlanCap": 20000,
+  "totalBytes": 298864,
+  "largestFile": {
+    "path": "_astro/Base.BBoBMRsF.css",
+    "bytes": 23386
+  },
+  "oversized": [],
+  "byTopLevelDirectory": {
+    "title": 11,
+    "agency": 5,
+    "(root)": 4,
+    "_astro": 1,
+    "about": 1,
+    "api": 1,
+    "data-quality": 1,
+    "methodology": 1,
+    "shared-jurisdiction": 1
+  },
+  "ok": true
+}
