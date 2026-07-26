@@ -57,8 +57,31 @@ pnpm exec wrangler r2 bucket create ecfr-atlas-exports      # Phase 5, public
 `ecfr-atlas-exports` is the public nightly SQL dump and is the only bucket with public access.
 
 The sync pipeline signs its own SigV4 PUTs rather than going through wrangler, so it needs an
-**R2 API token** (Cloudflare dashboard → R2 → Manage API Tokens → Object Read & Write, scoped to
-`ecfr-atlas-content`). That is a different credential from the Workers deploy token below.
+**R2 API token** — S3-style credentials, a *different* thing from the Workers deploy token in 0.3
+and not interchangeable with it.
+
+Dashboard → **R2 Object Storage** → **API** (top right) → **Manage API tokens** → *Create API
+token* → permission **Object Read & Write**, scoped to `ecfr-atlas-content`. The result is an
+**Access Key ID** and a **Secret Access Key**; the secret is shown exactly once.
+
+Four variables are needed together, and the pipeline treats them as all-or-nothing:
+
+```bash
+export R2_ACCOUNT_ID=<your Cloudflare account id>   # same value as CLOUDFLARE_ACCOUNT_ID
+export R2_BUCKET=ecfr-atlas-content
+export R2_ACCESS_KEY_ID=<access key id>
+export R2_SECRET_ACCESS_KEY=<secret access key>
+```
+
+**R2 is optional for a first backfill.** If any of the four is missing, `readR2Config()` returns
+null and the pipeline uses a `NullObjectSink`: it renders and measures the body text, counts the
+bytes, and uploads nothing. Structure, word counts, rollups and amendments all still land in D1.
+
+Be aware of the cost of deferring it, though. The checkpoint in `.sync-cache/` stores node
+metadata, **not the fetched XML**, so it makes a *crashed* run resumable but does not make a
+*second* run cheap — adding R2 later means another full ~810 MB pull at ≤8 req/s. Getting the
+token first is a few minutes; re-running the backfill is closer to an hour. Do it first unless you
+are deliberately smoke-testing the pipeline.
 
 ### 0.3 Cloudflare API token
 
@@ -94,6 +117,7 @@ Settings → Secrets and variables → Actions.
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Dashboard sidebar |
 | `R2_ACCESS_KEY_ID` | secret | From the R2 API token in 0.2 |
 | `R2_SECRET_ACCESS_KEY` | secret | From the R2 API token in 0.2 |
+| `R2_ACCOUNT_ID` | secret | Same value as `CLOUDFLARE_ACCOUNT_ID`; the pipeline reads it under its own name |
 | `HEALTHCHECK_SYNC_URL` | secret | Phase 3 |
 | `HEALTHCHECK_EXPORT_URL` | secret | Phase 5 |
 | `API_ORIGIN` | variable | `https://ecfr.fixit.works` |
@@ -112,13 +136,22 @@ Run it **locally or on the homelab**, not in CI. A GitHub runner would work, but
 eCFR's rate limiter.
 
 ```bash
+# D1 writes go through `wrangler d1 execute`, so an interactive `wrangler login` is enough
+# locally and these two are only needed for a non-interactive shell or CI.
 export CLOUDFLARE_API_TOKEN=...  CLOUDFLARE_ACCOUNT_ID=...
+
+# All four, or none — see 0.2.
+export R2_ACCOUNT_ID=...         R2_BUCKET=ecfr-atlas-content
 export R2_ACCESS_KEY_ID=...      R2_SECRET_ACCESS_KEY=...
-export R2_BUCKET=ecfr-atlas-content
 
 pnpm sync:backfill --dry-run     # fetch, parse, validate; write nothing
 pnpm sync:backfill               # for real
 ```
+
+The dry run is worth the time on a first attempt: it exercises the fetch, the parser and the
+publish gate without touching D1, so a credential or schema problem surfaces before an hour of
+downloading. Watch the log for `no R2 credentials` — that line means body text will be measured
+but not stored.
 
 Expect 30–60 minutes wall clock. The pipeline holds itself to ≤8 req/s because eCFR runs a token
 bucket, not a concurrency gate — serialising does *not* avoid it. Two failure bodies are retried
