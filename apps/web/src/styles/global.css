@@ -1,0 +1,578 @@
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   ecfr-atlas design tokens
+
+   Light and dark are expressed with CSS `light-dark()` rather than a duplicated `@media
+   (prefers-color-scheme: dark)` block. One declaration per token, both themes in it, and the
+   toggle only has to flip `color-scheme` on <html> — which means the theme switch is a single
+   property change, not a re-cascade, and it cannot cause a flash.
+
+   No web fonts anywhere. The predecessor's LCP was 3,081 ms; the target is the 795 ms the same
+   content measured as static HTML, and a font request on the critical path is the easiest way
+   to give that back. System stacks also render a serif that the reader's OS already has hinted.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif;
+  /* Regulation prose. Old-style serifs first: they set legal text at small sizes better than
+     Times, and every one of these ships with a mainstream OS. */
+  --font-serif:
+    "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Charter, Georgia,
+    "Times New Roman", serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Warm paper in light, warm-neutral ink in dark. Deliberately not pure #fff/#000: this is a
+     document you read for twenty minutes at a time. */
+  --color-canvas: light-dark(#fbfaf7, #14140f);
+  --color-surface: light-dark(#ffffff, #1c1c17);
+  --color-sunken: light-dark(#f3f1eb, #232320);
+  --color-border: light-dark(#e4e0d6, #33322c);
+  --color-border-strong: light-dark(#c7c1b4, #4a483f);
+
+  --color-ink: light-dark(#191813, #edeae1);
+  --color-ink-muted: light-dark(#55514a, #a8a49a);
+  --color-ink-subtle: light-dark(#7b756a, #86827a);
+
+  --color-accent: light-dark(#1b4f8a, #7fb2e8);
+  --color-accent-strong: light-dark(#123a68, #a9cdf3);
+  --color-accent-soft: light-dark(#e9f0f8, #17293c);
+
+  /* Shared jurisdiction gets its own hue because it is a feature of the data, not a warning. */
+  --color-shared: light-dark(#71318f, #d1a3ea);
+  --color-shared-soft: light-dark(#f4ecf9, #2b1c35);
+
+  /* Unknown values. Distinct from both accent and error: "we don't know" is neither a link nor
+     a failure, and rendering it as either has been tried and misleads. */
+  --color-unknown: light-dark(#8a5310, #e0a75c);
+  --color-unknown-soft: light-dark(#fbf1e3, #33260f);
+
+  --color-good: light-dark(#1d6742, #6cc394);
+  --color-good-soft: light-dark(#e6f2ea, #14291d);
+
+  --color-focus: light-dark(#0b6bcb, #7fb2e8);
+
+  --radius-card: 8px;
+
+  /* A real reading measure for regulation prose. 66ch at the reader's serif size lands close to
+     the 60-75 characters that legal typography settles on. */
+  --measure: 66ch;
+}
+
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Every figure on this site sits in a column that is compared against other figures. */
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.55;
+  }
+
+  :where(a) {
+    color: var(--color-accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+  }
+  :where(a):hover {
+    color: var(--color-accent-strong);
+  }
+
+  /* Visible, high-contrast, and never removed. Keyboard navigation of the table of contents is
+     a stated requirement, and an invisible focus ring makes it unusable. */
+  :where(a, button, input, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  :where(h1, h2, h3, h4) {
+    line-height: 1.2;
+    text-wrap: balance;
+    font-weight: 650;
+  }
+
+  :where(table) {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms;
+      transition-duration: 0.01ms;
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  /* ── page chrome ─────────────────────────────────────────────────────────── */
+
+  .shell {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 50;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-card);
+    padding: 0.5rem 0.85rem;
+    transition: top 120ms ease;
+  }
+  .skip-link:focus {
+    top: 0.5rem;
+  }
+
+  .site-head {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  .nav-link {
+    color: var(--color-ink-muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+    padding: 0.35rem 0;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .nav-link:hover {
+    color: var(--color-ink);
+  }
+  .nav-link[aria-current="page"] {
+    color: var(--color-ink);
+    border-bottom-color: var(--color-accent);
+    font-weight: 600;
+  }
+
+  /* ── surfaces ────────────────────────────────────────────────────────────── */
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: 1.15rem 1.25rem;
+  }
+
+  .card-tight {
+    padding: 0.85rem 1rem;
+  }
+
+  .rule {
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    margin-block: 2rem;
+  }
+
+  .eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color-ink-subtle);
+  }
+
+  /* ── figures ─────────────────────────────────────────────────────────────── */
+
+  .figure {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .figure-headline {
+    font-size: clamp(2.5rem, 7vw, 4.25rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1;
+  }
+
+  .figure-lg {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+  }
+
+  /* The em dash that stands in for an unmeasured value. Styled so it reads as a deliberate
+     statement rather than a missing glyph — this is the single most important visual decision
+     on the site, because the predecessor rendered the same condition as "0". */
+  .unknown {
+    color: var(--color-unknown);
+    text-decoration: underline dotted currentColor;
+    text-underline-offset: 0.3em;
+    cursor: help;
+    font-variant-numeric: normal;
+  }
+
+  /* The large-figure form of the same thing. No underline: a dotted rule under a 4rem em dash
+     renders as a solid bar and reads as a broken element rather than as a stated absence. */
+  .unknown-block {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.55rem;
+    color: var(--color-unknown);
+  }
+  .unknown-dash {
+    /* Two thirds of the figure size it stands in for: still clearly the headline slot, but no
+       longer the widest element on the page. */
+    font-size: 0.66em;
+    line-height: 1;
+    opacity: 0.75;
+  }
+  .unknown-dash.figure-headline {
+    font-size: clamp(1.75rem, 4.5vw, 2.75rem);
+  }
+  .unknown-dash.figure-lg {
+    font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  }
+  .unknown-label {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+  .unknown-reason {
+    flex-basis: 100%;
+    margin-top: 0.35rem;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--color-ink-muted);
+  }
+
+  /* ── badges ──────────────────────────────────────────────────────────────── */
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.28rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .badge-neutral {
+    background: var(--color-sunken);
+    color: var(--color-ink-muted);
+    border-color: var(--color-border);
+  }
+  .badge-good {
+    background: var(--color-good-soft);
+    color: var(--color-good);
+  }
+  .badge-unknown {
+    background: var(--color-unknown-soft);
+    color: var(--color-unknown);
+  }
+  .badge-shared {
+    background: var(--color-shared-soft);
+    color: var(--color-shared);
+  }
+  .badge-accent {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+
+  /* ── tables ──────────────────────────────────────────────────────────────── */
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
+
+  .data-table {
+    font-size: 0.875rem;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 0.55rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: baseline;
+  }
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-sunken);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .data-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .data-table tbody tr:hover {
+    background: var(--color-sunken);
+  }
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Sort controls are injected by the table island; without JS the header is plain text and the
+     table is still in its documented default order. */
+  .sort-btn {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font: inherit;
+    color: inherit;
+  }
+  .sort-btn::after {
+    content: "↕";
+    opacity: 0.35;
+    font-size: 0.85em;
+  }
+  .sort-btn[aria-sort="ascending"]::after {
+    content: "↑";
+    opacity: 1;
+  }
+  .sort-btn[aria-sort="descending"]::after {
+    content: "↓";
+    opacity: 1;
+  }
+
+  /* ── bar chart ───────────────────────────────────────────────────────────── */
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(9rem, 15rem) 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding-block: 0.3rem;
+    font-size: 0.85rem;
+  }
+  .bar-track {
+    background: var(--color-sunken);
+    border-radius: 3px;
+    height: 0.7rem;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--color-accent);
+    border-radius: 3px;
+  }
+  .bar-fill-unknown {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--color-unknown-soft),
+      var(--color-unknown-soft) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+  }
+
+  /* ── the reader ──────────────────────────────────────────────────────────── */
+
+  .reg-prose {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.68;
+    max-width: var(--measure);
+    color: var(--color-ink);
+  }
+  .reg-prose p {
+    margin-block: 0.9em;
+  }
+  .reg-prose h2 {
+    font-family: var(--font-sans);
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-block: 2rem 0.6rem;
+    scroll-margin-top: 1.5rem;
+  }
+  .reg-prose h3 {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin-block: 1.4rem 0.4rem;
+    scroll-margin-top: 1.5rem;
+  }
+  .reg-prose .reg-num {
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+    margin-right: 0.35em;
+  }
+  .reg-prose ol,
+  .reg-prose ul {
+    margin-block: 0.9em;
+    padding-left: 1.6em;
+  }
+  .reg-prose li {
+    margin-block: 0.35em;
+  }
+  .reg-prose table {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    margin-block: 1.4em;
+    display: block;
+    overflow-x: auto;
+  }
+  .reg-prose table th,
+  .reg-prose table td {
+    border: 1px solid var(--color-border);
+    padding: 0.4rem 0.6rem;
+  }
+  .reg-prose :target {
+    background: var(--color-accent-soft);
+    border-radius: 3px;
+  }
+  .reg-section + .reg-section {
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.5rem;
+  }
+
+  .toc-link {
+    display: block;
+    padding: 0.28rem 0.5rem;
+    font-size: 0.82rem;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    border-radius: 0 3px 3px 0;
+  }
+  .toc-link:hover {
+    background: var(--color-sunken);
+    color: var(--color-ink);
+  }
+  .toc-link[aria-current="true"] {
+    border-left-color: var(--color-accent);
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+
+  /* ── callouts ────────────────────────────────────────────────────────────── */
+
+  .callout {
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-border-strong);
+    border-radius: var(--radius-card);
+    padding: 0.85rem 1rem;
+    font-size: 0.875rem;
+    background: var(--color-surface);
+  }
+  .callout-shared {
+    border-left-color: var(--color-shared);
+    background: var(--color-shared-soft);
+  }
+  .callout-unknown {
+    border-left-color: var(--color-unknown);
+    background: var(--color-unknown-soft);
+  }
+  .callout-accent {
+    border-left-color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+
+  /* A fixture build says so on every page, above everything. */
+  .fixture-banner {
+    background: var(--color-unknown);
+    color: light-dark(#ffffff, #14140f);
+    font-size: 0.8rem;
+    font-weight: 650;
+    text-align: center;
+    padding: 0.4rem 1rem;
+  }
+
+  .prose-page {
+    max-width: 46rem;
+  }
+  .prose-page h2 {
+    font-size: 1.25rem;
+    margin-block: 2.2rem 0.6rem;
+  }
+  .prose-page h3 {
+    font-size: 1rem;
+    margin-block: 1.6rem 0.4rem;
+  }
+  .prose-page p,
+  .prose-page li {
+    color: var(--color-ink-muted);
+    margin-block: 0.75rem;
+  }
+  .prose-page ul,
+  .prose-page ol {
+    padding-left: 1.4rem;
+    list-style: revert;
+  }
+  .prose-page code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-sunken);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  .prose-page dt {
+    font-weight: 650;
+    color: var(--color-ink);
+    margin-top: 1rem;
+  }
+  .prose-page dd {
+    color: var(--color-ink-muted);
+    margin-left: 0;
+  }
+}
+
+@layer utilities {
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}

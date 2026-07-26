@@ -1,0 +1,38 @@
+{
+  "name": "ecfr-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An open, measured atlas of the US Code of Federal Regulations.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=./packages/** build && pnpm --filter=@ecfr-atlas/web build",
+    "dev:web": "pnpm --filter=@ecfr-atlas/web dev",
+    "dev:api": "pnpm --filter=@ecfr-atlas/api dev",
+    "typecheck": "tsc --build --verbose",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:ci": "biome ci .",
+    "format": "biome check --write .",
+    "format:check": "biome format .",
+    "db:migrate:local": "wrangler d1 migrations apply ecfr-atlas --local --config apps/api/wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply ecfr-atlas --remote --config apps/api/wrangler.jsonc",
+    "db:reset": "node scripts/db-reset.ts",
+    "sync:backfill": "node --max-old-space-size=8192 scripts/sync/backfill.ts",
+    "sync:delta": "node --max-old-space-size=8192 scripts/sync/delta.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.5",
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.114.0"
+  }
+}

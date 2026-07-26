@@ -1,0 +1,126 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Tuned for a solo maintainer. The failure mode being designed against is not stale",
+    "dependencies, it is thirty open PRs that nobody reads, after which the maintainer stops",
+    "reading all of them and the security ones go past unnoticed too.",
+    "",
+    "So: routine updates are batched, quiet and automerged; anything that can actually break",
+    "the build waits for a human; and security fixes escape every one of those restrictions.",
+    "",
+    "NOTE: GitHub's own Dependabot SECURITY ALERTS stay enabled separately in repository",
+    "settings. Renovate and Dependabot alerts are different products and there is no conflict:",
+    "Dependabot tells us a CVE exists, Renovate opens the PR that fixes it. Do not disable",
+    "Dependabot alerts just because Renovate is handling version bumps — only Dependabot's",
+    "VERSION UPDATE PRs (.github/dependabot.yml) should stay off, to avoid duplicate PRs."
+  ],
+  "extends": ["config:recommended", ":semanticCommitTypeAll(chore)"],
+  "timezone": "Etc/UTC",
+  "schedule": ["* 0-6 * * 1"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rebaseWhen": "conflicted",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency dashboard",
+
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-6 1 * *"],
+    "automerge": true
+  },
+
+  "packageRules": [
+    {
+      "description": [
+        "Routine non-major updates: one grouped PR, automerged once CI is green. These are the",
+        "ones that generate volume and almost never need a decision."
+      ],
+      "matchUpdateTypes": ["patch", "minor", "pin", "digest"],
+      "groupName": "non-major dependencies",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": [
+        "Majors always wait for a human. Astro 6 -> 7, Zod 3 -> 4 and Wrangler 3 -> 4 were each",
+        "a day of work in this stack; none of them should arrive as an automerged PR at 3am.",
+        "They appear on the dependency dashboard as checkboxes and open a PR only when ticked."
+      ],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "labels": ["dependencies", "major"]
+    },
+    {
+      "description": [
+        "The Cloudflare toolchain has to move together. @astrojs/cloudflare declares peer ranges",
+        "on both astro and wrangler, so bumping one alone produces an install that resolves but",
+        "does not deploy."
+      ],
+      "matchPackageNames": ["astro", "@astrojs/cloudflare", "wrangler", "@cloudflare/**"],
+      "groupName": "cloudflare + astro toolchain",
+      "automerge": false
+    },
+    {
+      "description": [
+        "Zod is the contract boundary — every eCFR schema and the public API's OpenAPI document",
+        "derive from it. A minor that changes error shapes or inference is worth reading, and",
+        "@hono/zod-openapi pins a zod peer range, so they travel together."
+      ],
+      "matchPackageNames": ["zod", "@hono/zod-openapi", "hono"],
+      "groupName": "api contract stack",
+      "automerge": false
+    },
+    {
+      "description": [
+        "fast-xml-parser parses 810 MB of upstream XML and its output shape decides what gets",
+        "counted. Never automerged: a parser behaviour change is a silent measurement change,",
+        "which is precisely the class of bug this codebase was rewritten to eliminate."
+      ],
+      "matchPackageNames": ["fast-xml-parser"],
+      "automerge": false,
+      "labels": ["dependencies", "measurement-critical"]
+    },
+    {
+      "description": [
+        "GitHub Actions: grouped and automerged for minor and patch. Majors still need approval",
+        "— action majors routinely change the runner's Node version or an input name."
+      ],
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor", "digest"],
+      "groupName": "github actions",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": [
+        "Node and pnpm are pinned in three places (engines, packageManager, .nvmrc) and a bump",
+        "has to land in all of them at once. Always a human decision."
+      ],
+      "matchDepNames": ["node", "pnpm"],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "description": [
+      "Security fixes bypass every restriction above: no 3-day soak, no Monday-morning window,",
+      "no grouping, no dashboard approval. A fix that waits for the batch is not a fix."
+    ],
+    "enabled": true,
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"],
+    "prPriority": 10,
+    "labels": ["dependencies", "security"],
+    "automerge": false
+  },
+
+  "osvVulnerabilityAlerts": true
+}

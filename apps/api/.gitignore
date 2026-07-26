@@ -1,0 +1,12 @@
+# Third-party bundles copied out of node_modules by scripts/vendor-scalar.ts.
+#
+# Not committed on purpose: it is megabytes of minified code that nobody reads in a diff, and
+# a committed copy could silently disagree with the version pinned in pnpm-lock.yaml. The
+# `dev` and `deploy` scripts regenerate it, so it is always exactly what pnpm installed.
+#
+# Root's `dist/` already matches this at any depth; the rule is restated here only so the
+# reason lives next to the directory it is about.
+public/dist/
+
+# `.dev.vars.example` is un-ignored in the ROOT .gitignore, beside the `.dev.vars.*` rule it
+# has to override — one place, so a second app adding one does not have to rediscover this.

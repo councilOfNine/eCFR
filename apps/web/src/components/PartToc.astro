@@ -1,0 +1,88 @@
+---
+/**
+ * The reader's table of contents.
+ *
+ * Plain anchors in a <nav>, so it is keyboard-navigable by default — tab moves through it, enter
+ * follows, and the browser's own find-in-page works on it. The active-section highlight is added
+ * by an IntersectionObserver, which is the only JS here and is purely decorative: with it
+ * disabled the TOC still navigates correctly.
+ *
+ * `scroll-margin-top` on the headings (see global.css) keeps a jumped-to section clear of the
+ * viewport edge without any scroll maths.
+ */
+import { STRINGS } from '../constants/strings';
+import type { SectionEntry } from '../data/contract';
+import WordCountView from './WordCount.astro';
+
+interface Props {
+  sections: SectionEntry[];
+}
+
+const { sections } = Astro.props;
+---
+
+<nav aria-labelledby="toc-heading" class="text-sm" data-part-toc>
+  <h2 id="toc-heading" class="eyebrow mb-2">
+    {STRINGS.partToc.heading}<span class="ml-1 font-normal normal-case tracking-normal">{STRINGS.partToc.count(sections.length)}</span>
+  </h2>
+  {
+    sections.length === 0 ? (
+      <p class="text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.partToc.empty}
+      </p>
+    ) : (
+      <ol class="max-h-[70vh] overflow-y-auto pr-1">
+        {sections.map((section) => (
+          <li>
+            <a href={`#${section.anchor}`} class="toc-link" data-toc-target={section.anchor}>
+              <span class="flex items-baseline justify-between gap-2">
+                <span class="truncate">
+                  <span class="font-mono text-[0.72rem] text-[color:var(--color-ink-subtle)]">
+                    §&nbsp;{section.identifier}
+                  </span>
+                  <span class="ml-1">{section.reserved ? STRINGS.common.reservedHeading : section.label}</span>
+                </span>
+                <WordCountView value={section.word_count} variant="compact" class="text-[0.68rem]" />
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    )
+  }
+</nav>
+
+<script>
+  const nav = document.querySelector<HTMLElement>('[data-part-toc]');
+  const targets = [...document.querySelectorAll<HTMLElement>('.reg-prose [id]')];
+
+  if (nav && targets.length > 0 && 'IntersectionObserver' in window) {
+    const links = new Map<string, HTMLAnchorElement>();
+    for (const link of nav.querySelectorAll<HTMLAnchorElement>('[data-toc-target]')) {
+      const key = link.dataset.tocTarget;
+      if (key) links.set(key, link);
+    }
+
+    let current: HTMLAnchorElement | null = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Topmost intersecting section wins, so scrolling up highlights what you are reading
+        // rather than what you just left.
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        const next = links.get(visible.target.id);
+        if (!next || next === current) return;
+        current?.removeAttribute('aria-current');
+        next.setAttribute('aria-current', 'true');
+        // Keep the highlight in view in a long TOC without yanking the page.
+        next.scrollIntoView({ block: 'nearest' });
+        current = next;
+      },
+      { rootMargin: '0px 0px -70% 0px', threshold: 0 },
+    );
+
+    for (const target of targets) observer.observe(target);
+  }
+</script>

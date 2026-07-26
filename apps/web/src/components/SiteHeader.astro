@@ -1,0 +1,63 @@
+---
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+import ThemeToggle from './ThemeToggle.astro';
+
+interface Props {
+  section?: 'dashboard' | 'agencies' | 'titles' | 'shared' | 'quality' | 'about';
+}
+const { section } = Astro.props;
+const { manifest } = await atlas();
+
+const nav = [
+  { key: 'dashboard', href: route.home(), label: STRINGS.header.nav.dashboard },
+  { key: 'agencies', href: route.agencyIndex(), label: STRINGS.header.nav.agencies },
+  { key: 'titles', href: route.titleIndex(), label: STRINGS.header.nav.titles },
+  { key: 'shared', href: route.sharedJurisdiction(), label: STRINGS.header.nav.shared },
+  { key: 'quality', href: route.dataQuality(), label: STRINGS.header.nav.quality },
+  { key: 'about', href: route.methodology(), label: STRINGS.header.nav.methodology },
+] as const;
+---
+
+<header class="site-head">
+  <div class="shell flex flex-wrap items-center gap-x-6 gap-y-2 py-3">
+    <a href={route.home()} class="flex items-baseline gap-2 no-underline text-[color:var(--color-ink)]">
+      <span class="text-base font-bold tracking-tight">{SITE.name}</span>
+      <span class="hidden text-xs text-[color:var(--color-ink-subtle)] sm:inline">
+        {SITE.tagline}
+      </span>
+    </a>
+
+    <nav aria-label={STRINGS.a11y.primaryNav} class="order-3 flex w-full gap-5 overflow-x-auto md:order-none md:w-auto">
+      {
+        nav.map((item) => (
+          <a
+            href={item.href}
+            class="nav-link"
+            aria-current={section === item.key ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="ml-auto flex items-center gap-3">
+      {
+        /*
+          Freshness belongs in the chrome, not buried on an about page: the first question a
+          researcher asks of a derived dataset is how old it is.
+        */
+        manifest.source_date && (
+          <span class="hidden text-xs text-[color:var(--color-ink-subtle)] lg:inline">
+            {STRINGS.header.sourceDatePrefix} <time datetime={manifest.source_date}>{manifest.source_date}</time>
+          </span>
+        )
+      }
+      <a href={route.apiPage()} class="nav-link">{STRINGS.header.nav.api}</a>
+      <ThemeToggle />
+    </div>
+  </div>
+</header>

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The pipeline runs in Node under GitHub Actions, never in a Worker. Its lib is the Node
+    // one; pulling in DOM types here would let a `document` reference typecheck.
+    "types": ["node"],
+
+    // ES2024 for String.prototype.toWellFormed, which sql.ts uses to guarantee that a lone
+    // surrogate cannot reach two escaping paths and be substituted differently by each.
+    "lib": ["ES2024"],
+
+    // Typecheck only. This project emits nothing: the entry points are .mjs run directly by
+    // Node with native type stripping, so there is no build output to reference. `composite`
+    // is off for the same reason — it would demand a rootDir containing every file in the
+    // program, and the program deliberately reaches into ../../packages/*/src.
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+
+    // Node's strip-only type stripping erases types without transforming code, so it rejects
+    // enums, namespaces, parameter properties and `import =`. This flag turns a 3am runtime
+    // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX into a typecheck failure in the pull request.
+    "erasableSyntaxOnly": true,
+
+    // scripts/ is not a pnpm workspace member (pnpm-workspace.yaml globs packages/* and
+    // apps/*), so nothing links @ecfr-atlas/* into node_modules for tsc to find. These paths
+    // mirror scripts/sync/lib/ts-loader.mjs at runtime and vitest.config.ts under test; all
+    // three must agree.
+    "paths": {
+      "@ecfr-atlas/core": ["../../packages/core/src/index.ts"],
+      "@ecfr-atlas/core/ecfr-schemas": ["../../packages/core/src/ecfr-schemas.ts"],
+      "@ecfr-atlas/core/api-schemas": ["../../packages/core/src/api-schemas.ts"],
+      "@ecfr-atlas/ecfr": ["../../packages/ecfr/src/index.ts"]
+    }
+  },
+  "include": ["lib/**/*.ts", "vitest.config.ts"]
+}

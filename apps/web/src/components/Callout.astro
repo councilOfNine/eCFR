@@ -1,0 +1,21 @@
+---
+interface Props {
+  tone?: 'neutral' | 'shared' | 'unknown' | 'accent';
+  title?: string;
+  class?: string;
+}
+const { tone = 'neutral', title, class: className = '' } = Astro.props;
+const toneClass =
+  tone === 'shared'
+    ? 'callout-shared'
+    : tone === 'unknown'
+      ? 'callout-unknown'
+      : tone === 'accent'
+        ? 'callout-accent'
+        : '';
+---
+
+<aside class:list={['callout', toneClass, className]}>
+  {title && <p class="mb-1 font-semibold">{title}</p>}
+  <slot />
+</aside>

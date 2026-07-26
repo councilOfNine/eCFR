@@ -1,0 +1,120 @@
+---
+/**
+ * Renders one measurement.
+ *
+ * This component is the enforcement point for the rule the whole project exists to keep: an
+ * unmeasured value renders as an em dash carrying its reason, and there is no code path through
+ * here that turns `null` into `0`. Every figure on the site goes through it.
+ *
+ * The unknown state has TWO presentations, and the split is not cosmetic. At table size a dashed
+ * em dash with a tooltip reads correctly. At headline size — 4rem — the same markup renders as a
+ * solid orange slab that looks like a broken image, and a reader's first conclusion is that the
+ * site is malfunctioning rather than that the value is genuinely unknown. So large figures get a
+ * dash at a restrained size next to the words "Not measured", which is what the dash means
+ * anyway. An unknown value appearing in the headline slot is a normal condition on this site,
+ * not an error state, and it has to look deliberate.
+ */
+import { assertNever } from '@ecfr-atlas/core';
+import type { WordCount } from '@ecfr-atlas/core/api-schemas';
+import { STRINGS } from '../constants/strings';
+import { formatCompact, formatWords, unknownReason } from '../data/format';
+import { WordCountVariant } from './types';
+
+interface Props {
+  value: WordCount;
+  variant?: WordCountVariant;
+  /** Appended after a known figure, e.g. "words". Omitted for unknowns. */
+  unit?: string;
+  /**
+   * Print the reason as visible text rather than only as a tooltip. Used where the figure has
+   * room around it — the dashboard headline, the agency total cards — because a reason nobody
+   * hovers is a reason nobody reads.
+   */
+  showReason?: boolean;
+  class?: string;
+}
+
+const {
+  value,
+  variant = WordCountVariant.Default,
+  unit,
+  showReason = false,
+  class: className = '',
+} = Astro.props;
+
+const reason = unknownReason(value);
+
+/**
+ * One exhaustive dispatch decides everything the variant controls, so adding a variant is a
+ * compile error here rather than a figure that silently renders at the wrong size.
+ */
+interface Presentation {
+  sizeClass: string;
+  text: string;
+  /** Large figures get the labelled unknown treatment described above. */
+  large: boolean;
+}
+
+let presentation: Presentation;
+switch (variant) {
+  case WordCountVariant.Headline:
+    presentation = { sizeClass: 'figure-headline', text: formatWords(value), large: true };
+    break;
+  case WordCountVariant.Lg:
+    presentation = { sizeClass: 'figure-lg', text: formatWords(value), large: true };
+    break;
+  case WordCountVariant.Default:
+    presentation = { sizeClass: '', text: formatWords(value), large: false };
+    break;
+  case WordCountVariant.Compact:
+    presentation = { sizeClass: '', text: formatCompact(value), large: false };
+    break;
+  default:
+    presentation = assertNever(variant, 'WordCountVariant');
+}
+const { sizeClass, text, large } = presentation;
+---
+
+{
+  reason === null ? (
+    <span class:list={['figure', sizeClass, className]} title={formatWords(value)}>
+      {text}
+      {unit && (
+        <span class="ml-1 text-[0.7em] font-normal text-[color:var(--color-ink-subtle)]">
+          {unit}
+        </span>
+      )}
+    </span>
+  ) : large ? (
+    /*
+      `data-unmeasured` is not styling. It is the marker scripts/check-html.ts asserts on, so the
+      "an unknown never renders as a number" rule is verified against the real output of every
+      build rather than trusted to survive future edits.
+    */
+    <span class:list={['unknown-block', className]} data-unmeasured>
+      <span class:list={['unknown-dash', sizeClass]} aria-hidden="true">
+        —
+      </span>
+      <span class="unknown-label">
+        {STRINGS.wordCount.unmeasured}
+        <span class="visually-hidden">. {reason}</span>
+      </span>
+      {showReason && (
+        <span class="unknown-reason" aria-hidden="true">
+          {reason}
+        </span>
+      )}
+    </span>
+  ) : (
+    /*
+      `title` gives the pointer tooltip, the visually-hidden span gives screen readers the same
+      sentence, and the dotted underline signals that the dash is meaningful rather than a
+      layout artefact. Three channels for one fact, because a silent gap in a dataset about
+      federal regulation is worse than no dataset.
+    */
+    <span class:list={['figure', 'unknown', className]} title={reason} data-unmeasured>
+      <span aria-hidden="true">—</span>
+      <span class="visually-hidden">{STRINGS.wordCount.unmeasured}. {reason}</span>
+    </span>
+  )
+}

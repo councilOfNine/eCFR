@@ -1,0 +1,22 @@
+{
+  "name": "@ecfr-atlas/ecfr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./parser": "./src/parser.ts",
+    "./wordcount": "./src/wordcount.ts",
+    "./errors": "./src/errors.ts",
+    "./governor": "./src/governor.ts"
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@ecfr-atlas/core": "workspace:*",
+    "fast-xml-parser": "^5.10.1",
+    "zod": "^4.4.3"
+  }
+}

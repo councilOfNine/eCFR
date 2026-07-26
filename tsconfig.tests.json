@@ -1,0 +1,79 @@
+{
+  // Everything that is neither a published package nor the Astro app: the sync pipeline under
+  // scripts/, and every test file in the repository.
+  //
+  // Before this project existed, `tsc --build` covered packages/* and apps/api and nothing
+  // else — so ~3,000 lines of sync pipeline and every test were unchecked. The name says
+  // "tests" because that is the bulk of it; scripts/ is here because it has nowhere else to be
+  // and being unchecked is worse than being oddly filed.
+  //
+  // Tests need types the shipped code must NOT have: `vitest`, `cloudflare:test`, and both
+  // @types/node and @cloudflare/workers-types at once. Keeping them in a separate project is
+  // what stops a Worker-only global leaking into packages/ecfr, which runs in Node — the
+  // confusion that package's `"types": ["node"]` comment exists to prevent. Two `fetch`
+  // declarations do collide here; that is acceptable in a file whose job is to drive a Worker
+  // from Node, and nowhere else.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // `String.prototype.toWellFormed` (scripts/sync/lib/sql.ts, substituting U+FFFD for lone
+    // surrogates before they reach a SQLite literal) is ES2024. The base config targets ES2023
+    // because that is what the Workers runtime guarantees; Node 22 has had toWellFormed since
+    // 20.0.0, and scripts/ only ever runs in Node.
+    "lib": ["ES2024"],
+    "target": "ES2023",
+    "noEmit": true,
+    "composite": true,
+    // scripts/ci/*.ts are run by plain `node`, whose native type stripping resolves a `./x.ts`
+    // specifier but — unlike the sync pipeline's resolve hook — never rewrites `./x.js` to it.
+    // So those files must write the real extension, and tsc has to be told that is legal.
+    // Safe only because this project emits nothing; the flag requires noEmit above.
+    "allowImportingTsExtensions": true,
+    // Composite projects must emit something for `tsc --build` to track staleness against;
+    // with noEmit that is only the build-info file.
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tests.tsbuildinfo",
+    "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"],
+    "paths": {
+      // scripts/ and the root test/ directory are not pnpm workspace members
+      // (pnpm-workspace.yaml globs `packages/*` and `apps/*`), so a bare `@ecfr-atlas/core` has
+      // nothing to resolve against. Combined with the `references` below, TypeScript redirects
+      // these to each referenced project's declaration output. Mirrors the alias block in
+      // vitest.config.ts and the resolve hook in scripts/sync/lib/ts-loader.mjs.
+      "@ecfr-atlas/core": ["./packages/core/src/index.ts"],
+      "@ecfr-atlas/core/*": ["./packages/core/src/*"],
+      "@ecfr-atlas/ecfr": ["./packages/ecfr/src/index.ts"],
+      "@ecfr-atlas/ecfr/*": ["./packages/ecfr/src/*"]
+      // No `@ecfr-atlas/db` entry: that package is migrations and tests only, with no source to
+      // resolve to. See packages/db/README.md.
+    }
+  },
+  "references": [{ "path": "packages/core" }, { "path": "packages/ecfr" }, { "path": "apps/api" }],
+  "include": [
+    "vitest.config.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "apps/api/test/**/*.ts",
+
+    // The four modules scripts/sync/lib/snapshot.ts imports out of apps/web by relative path,
+    // and ONLY those four. The snapshot writer and the Astro build have to agree exactly on the
+    // format, the measurement coherence check, display ordering and section anchors, so those
+    // four are imported rather than copied — a second opinion about any of them would drift.
+    //
+    // Listed file-by-file rather than as `apps/web/src/data/**`. The rest of that directory is
+    // the loaders (node:sqlite, the fixture, the snapshot reader), which belong to the Astro
+    // project's own tsconfig and are checked by `astro check`; pulling them in here would
+    // compile them a second time under different `lib` and `types` settings. These four import
+    // nothing but zod and @ecfr-atlas/core, which is what makes them safe to share.
+    //
+    // Without these entries `tsc --build` fails with TS6307 ("not listed within the file list of
+    // project") the moment scripts/ reaches into apps/web — a confusing error whose real cause
+    // is a project boundary, not the code.
+    "apps/web/src/data/contract.ts",
+    "apps/web/src/data/order.ts",
+    "apps/web/src/data/routes.ts",
+    "apps/web/src/data/schema.ts"
+  ],
+  // The live-network measurement harness: it talks to ecfr.gov, asserts nothing, and is not
+  // this project's to keep compiling.
+  "exclude": ["packages/ecfr/probe/**"]
+}

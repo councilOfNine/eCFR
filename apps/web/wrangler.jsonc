@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecfr-atlas-web",
+  "compatibility_date": "2026-07-01",
+
+  // Assets-only Worker: no `main`, no script. Every route in this app is prerendered, so there
+  // is nothing to execute per request — Cloudflare serves the file from its edge cache and the
+  // request never reaches a Worker isolate. That is also what keeps rule 4 structurally true:
+  // there is no code path on the read side that could call ecfr.gov.
+  //
+  // Verified against a real build: with zero on-demand routes @astrojs/cloudflare leaves
+  // dist/server empty and emits no _worker.js, so there is genuinely nothing to run.
+  "assets": {
+    // NOT ./dist. The adapter splits its output into dist/client (the uploadable assets) and
+    // dist/server (empty here). Pointing at ./dist would ship the build's internals.
+    "directory": "./dist/client",
+    // Serve /404.html for unmatched paths. Astro emits it from src/pages/404.astro.
+    "not_found_handling": "404-page",
+    // `/about` -> about/index.html, and `/about/` redirects to `/about`, matching the
+    // `trailingSlash: 'never'` canonical form in astro.config.ts.
+    "html_handling": "auto-trailing-slash"
+  },
+
+  "observability": { "enabled": true }
+}

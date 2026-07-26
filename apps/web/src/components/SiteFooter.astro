@@ -1,0 +1,63 @@
+---
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { formatDate } from '../data/format';
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+
+const { manifest } = await atlas();
+---
+
+<footer class="mt-16 border-t border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+  <div class="shell grid gap-8 py-10 md:grid-cols-[2fr_1fr_1fr]">
+    <div class="max-w-prose">
+      <p class="eyebrow">{STRINGS.footer.notOfficialEyebrow}</p>
+      <p class="mt-2 text-sm text-[color:var(--color-ink-muted)]">
+        {STRINGS.footer.independence}
+      </p>
+      <p class="mt-3 text-sm text-[color:var(--color-ink-muted)]">
+        Word counts on this site are <strong>derived measurements produced by this project's own
+        parser</strong>, not figures published by any government body. How they are produced, and
+        what is deliberately excluded from them, is documented on
+        <a href={route.methodology()}>Methodology</a>. Where a value could not be measured it is
+        shown as an em dash with its reason — never as zero.
+      </p>
+    </div>
+
+    <nav aria-label={STRINGS.a11y.footerNav} class="text-sm">
+      <p class="eyebrow">{STRINGS.footer.exploreEyebrow}</p>
+      <ul class="mt-2 space-y-1.5">
+        <li><a href={route.agencyIndex()}>{STRINGS.footer.links.agencies}</a></li>
+        <li><a href={route.titleIndex()}>{STRINGS.footer.links.titles}</a></li>
+        <li><a href={route.sharedJurisdiction()}>{STRINGS.footer.links.shared}</a></li>
+        <li><a href={route.dataQuality()}>{STRINGS.footer.links.quality}</a></li>
+      </ul>
+    </nav>
+
+    <nav aria-label={STRINGS.a11y.projectNav} class="text-sm">
+      <p class="eyebrow">{STRINGS.footer.projectEyebrow}</p>
+      <ul class="mt-2 space-y-1.5">
+        <li><a href={route.methodology()}>{STRINGS.footer.links.methodology}</a></li>
+        <li><a href={route.apiPage()}>{STRINGS.footer.links.api}</a></li>
+        <li><a href={route.about()}>{STRINGS.footer.links.about}</a></li>
+        <li>
+          <a href={SITE.ecfrHomeUrl} rel="external noopener">{STRINGS.footer.links.officialEcfr}</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <div class="shell border-t border-[color:var(--color-border)] py-4">
+    <p class="text-xs text-[color:var(--color-ink-subtle)]">
+      {
+        manifest.fixture
+          ? STRINGS.footer.fixtureLine
+          : manifest.source_date
+            ? STRINGS.footer.dataAsOf(formatDate(manifest.source_date))
+            : STRINGS.footer.sourceDateUnknown
+      }
+      {manifest.run_id !== null && STRINGS.footer.syncRun(manifest.run_id)}
+      {' '}Built from the <code class="font-mono">{manifest.source}</code> source.
+    </p>
+  </div>
+</footer>

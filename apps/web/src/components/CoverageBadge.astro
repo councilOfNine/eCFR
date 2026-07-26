@@ -1,0 +1,49 @@
+---
+/**
+ * refs_counted / refs_total, rendered next to every agency total.
+ *
+ * A total summed from 3 of 5 scopes is not wrong so much as unanswerable, and the predecessor
+ * published exactly that kind of number with nothing beside it. The badge is small, but it is
+ * the difference between "1.2 million words" and "1.2 million words, from all 5 of its scopes".
+ */
+import { STRINGS } from '../constants/strings';
+import type { Coverage } from '../data/contract';
+import { formatPct } from '../data/format';
+
+interface Props {
+  coverage: Coverage;
+  /** Suppresses the badge entirely at full coverage, for dense tables. */
+  hideWhenComplete?: boolean;
+}
+
+const { coverage, hideWhenComplete = false } = Astro.props;
+const complete = coverage.refs_total > 0 && coverage.refs_counted === coverage.refs_total;
+const none = coverage.refs_total === 0;
+const hidden = hideWhenComplete && complete;
+
+const label = none
+  ? STRINGS.coverageBadge.noScopes
+  : STRINGS.coverageBadge.measured(
+      coverage.refs_counted,
+      coverage.refs_total,
+      formatPct(coverage.pct, 0),
+    );
+---
+
+{
+  !hidden && (
+    <span
+      class:list={['badge', complete ? 'badge-good' : none ? 'badge-neutral' : 'badge-unknown']}
+      title={label}
+    >
+      <span aria-hidden="true">
+        {
+          none
+            ? STRINGS.coverageBadge.zeroScopes
+            : STRINGS.coverageBadge.ratio(coverage.refs_counted, coverage.refs_total)
+        }
+      </span>
+      <span class="visually-hidden">{label}</span>
+    </span>
+  )
+}

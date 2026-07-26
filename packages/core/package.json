@@ -1,0 +1,17 @@
+{
+  "name": "@ecfr-atlas/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ecfr-schemas": "./src/ecfr-schemas.ts",
+    "./api-schemas": "./src/api-schemas.ts"
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

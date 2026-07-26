@@ -1,0 +1,13 @@
+{
+  "name": "@ecfr-atlas/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The D1 schema. Migrations, and the tests that prove the CHECK constraints hold. No runtime code — see README.md.",
+  "files": [
+    "migrations"
+  ],
+  "devDependencies": {
+    "@ecfr-atlas/core": "workspace:*"
+  }
+}

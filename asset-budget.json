@@ -1,0 +1,25 @@
+{
+  "dist": "/Users/miketorres/Code/USDS/apps/web/dist/client",
+  "checkedAt": "2026-07-26T17:23:12.637Z",
+  "fileCount": 26,
+  "maxFiles": 18000,
+  "cloudflareFreePlanCap": 20000,
+  "totalBytes": 299227,
+  "largestFile": {
+    "path": "_astro/Base.BNGT4lES.css",
+    "bytes": 23356
+  },
+  "oversized": [],
+  "byTopLevelDirectory": {
+    "title": 11,
+    "agency": 5,
+    "(root)": 4,
+    "_astro": 1,
+    "about": 1,
+    "api": 1,
+    "data-quality": 1,
+    "methodology": 1,
+    "shared-jurisdiction": 1
+  },
+  "ok": true
+}

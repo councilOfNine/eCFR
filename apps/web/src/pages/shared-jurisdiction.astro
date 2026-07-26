@@ -1,0 +1,165 @@
+---
+/**
+ * Shared jurisdiction — a first-class research tool, not a footnote.
+ *
+ * 17 of 487 scopes are claimed by 2-6 agencies. The predecessor counted each of those in full
+ * for every claimant and then summed the results into a corpus total, which is how a single
+ * chapter could enter the headline six times. Rather than bury the correction, this page makes
+ * the overlap the subject: someone drafting a comment on 42 CFR Chapter I needs to know it
+ * answers to both the Indian Health Service and the Public Health Service before they file.
+ */
+import { parseRefKey } from '@ecfr-atlas/core';
+import Callout from '../components/Callout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import WordCountView from '../components/WordCount.astro';
+import { STRINGS } from '../constants/strings';
+import { formatInt, formatPct, isKnown, shareOf } from '../data/format';
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+import Base from '../layouts/Base.astro';
+
+const data = await atlas();
+const scopes = await data.listSharedScopes();
+const { corpus } = data.manifest;
+
+const claimantTotal = scopes.reduce((sum, scope) => sum + scope.agencies.length, 0);
+const maxClaimants = scopes.reduce((max, scope) => Math.max(max, scope.agencies.length), 0);
+const measured = scopes.filter((scope) => isKnown(scope.word_count)).length;
+/**
+ * Against the deduplicated corpus, not the attributed total — same reasoning as the dashboard.
+ * `corpus.shared` counts each shared scope once, so the only denominator that makes the ratio a
+ * share of anything is the total that also counts each scope once.
+ */
+const sharePct = shareOf(corpus.shared, corpus.deduplicated);
+
+/** Distinct agencies touched by at least one shared scope. */
+const agenciesInvolved = new Set(scopes.flatMap((s) => s.agencies.map((a) => a.slug))).size;
+---
+
+<Base
+  title={STRINGS.sharedJurisdiction.title}
+  description={STRINGS.sharedJurisdiction.description}
+  section="shared"
+>
+  <PageHeader
+    eyebrow={STRINGS.sharedJurisdiction.eyebrow}
+    title={STRINGS.sharedJurisdiction.heading}
+    standfirst={STRINGS.sharedJurisdiction.standfirst}
+  />
+
+  <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.sharedJurisdiction.summaryLabel}>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.scopesCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(scopes.length)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.sharedJurisdiction.scopesCard.note(formatInt(corpus.refs_total))}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.wordsCard.eyebrow}</p>
+      <p class="mt-1"><WordCountView value={corpus.shared} variant="lg" /></p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {sharePct !== null && STRINGS.sharedJurisdiction.wordsCard.note(formatPct(sharePct))}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.agenciesCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(agenciesInvolved)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {
+          STRINGS.sharedJurisdiction.agenciesCard.note(
+            formatInt(claimantTotal),
+            formatInt(scopes.length),
+          )
+        }
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.maxCard.eyebrow}</p>
+      <p class="figure figure-lg mt-1">{formatInt(maxClaimants)}</p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.sharedJurisdiction.maxCard.note}
+      </p>
+    </div>
+  </section>
+
+  <Callout tone="shared" class="mt-6" title={STRINGS.sharedJurisdiction.divisionCalloutTitle}>
+    <p>
+      In the <strong>deduplicated</strong> view a shared scope's words are split evenly among its
+      claimants, so agency totals sum back to the corpus. In the <strong>attributed</strong> view
+      each claimant is credited in full, which answers “what is this agency responsible for?” but
+      must never be summed across agencies. Even division is a modelling choice, not a
+      measurement — there is no data anywhere that says how the work actually splits, so the site
+      declines to invent a weighting. It is documented on
+      <a href={route.methodology()}> methodology</a>.
+    </p>
+  </Callout>
+
+  <section class="mt-10" aria-labelledby="scopes-heading">
+    <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <h2 id="scopes-heading" class="text-lg font-semibold">
+        {STRINGS.sharedJurisdiction.scopesHeading}
+      </h2>
+      <p class="text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.sharedJurisdiction.rankNote}
+        {
+          measured < scopes.length &&
+            STRINGS.sharedJurisdiction.unmeasuredNote(formatInt(scopes.length - measured))
+        }
+      </p>
+    </div>
+
+    {
+      scopes.length === 0 ? (
+        <p class="text-sm text-[color:var(--color-ink-muted)]">
+          {STRINGS.sharedJurisdiction.empty}
+        </p>
+      ) : (
+        <div class="table-wrap">
+          <table class="data-table">
+            <caption class="visually-hidden">{STRINGS.sharedJurisdiction.caption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{STRINGS.sharedJurisdiction.columns.citation}</th>
+                <th scope="col">{STRINGS.sharedJurisdiction.columns.scope}</th>
+                <th scope="col" class="num">{STRINGS.sharedJurisdiction.columns.words}</th>
+                <th scope="col" class="num">{STRINGS.sharedJurisdiction.columns.claimants}</th>
+                <th scope="col">{STRINGS.sharedJurisdiction.columns.agencies}</th>
+                <th scope="col">{STRINGS.sharedJurisdiction.columns.officialText}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scopes.map((scope) => (
+                <tr>
+                  <th scope="row" class="whitespace-nowrap font-normal">
+                    <a href={route.scopeHref(parseRefKey(scope.ref_key))}>{scope.display}</a>
+                  </th>
+                  <td class="max-w-sm">
+                    <span class="block truncate" title={scope.label ?? undefined}>
+                      {scope.label ?? scope.title_name}
+                    </span>
+                  </td>
+                  <td class="num"><WordCountView value={scope.word_count} /></td>
+                  <td class="num">
+                    <span class="badge badge-shared">{scope.agencies.length}</span>
+                  </td>
+                  <td>
+                    {scope.agencies.map((agency, index) => (
+                      <>
+                        {index > 0 && ', '}
+                        <a href={route.agency(agency.slug)}>{agency.display_name}</a>
+                      </>
+                    ))}
+                  </td>
+                  <td>
+                    <a href={scope.ecfr_url} rel="external noopener">{STRINGS.common.ecfrLink}</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+</Base>

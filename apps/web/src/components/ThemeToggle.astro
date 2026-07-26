@@ -1,0 +1,65 @@
+---
+/**
+ * The site's entire interactive surface outside the sortable table and the copy button: three
+ * states, one button, no framework.
+ *
+ * It ships hidden and is revealed by its own script, so a no-JS reader is never shown a control
+ * that does nothing. The default state follows the OS via `color-scheme: light dark`, so the
+ * button is an override rather than the mechanism.
+ *
+ * The labels ride on data attributes so the client script never imports the strings module —
+ * importing it would bundle the site's whole copy into JS every reader downloads.
+ */
+import { STRINGS } from '../constants/strings';
+---
+
+<button
+  type="button"
+  id="theme-toggle"
+  class="badge badge-neutral hidden"
+  aria-live="polite"
+  data-label-system={STRINGS.themeToggle.system}
+  data-label-light={STRINGS.themeToggle.light}
+  data-label-dark={STRINGS.themeToggle.dark}
+>
+  {STRINGS.themeToggle.system}
+</button>
+
+<script>
+  const KEY = 'ecfr-theme';
+  const ORDER = ['system', 'light', 'dark'] as const;
+  type Mode = (typeof ORDER)[number];
+
+  const button = document.getElementById('theme-toggle');
+  if (button instanceof HTMLButtonElement) {
+    button.classList.remove('hidden');
+
+    const read = (): Mode => {
+      try {
+        const stored = localStorage.getItem(KEY);
+        return stored === 'light' || stored === 'dark' ? stored : 'system';
+      } catch {
+        return 'system';
+      }
+    };
+
+    const apply = (mode: Mode) => {
+      if (mode === 'system') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = mode;
+      button.textContent = button.dataset[`label${mode[0]!.toUpperCase()}${mode.slice(1)}`] ?? '';
+    };
+
+    apply(read());
+
+    button.addEventListener('click', () => {
+      const next = ORDER[(ORDER.indexOf(read()) + 1) % ORDER.length]!;
+      try {
+        if (next === 'system') localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, next);
+      } catch {
+        /* Storage blocked; the override still applies for this page view. */
+      }
+      apply(next);
+    });
+  }
+</script>

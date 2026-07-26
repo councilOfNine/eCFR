@@ -1,0 +1,15 @@
+# Headers for Workers Static Assets.
+#
+# Asset responses are served by Cloudflare before the Worker runs, so the `securityHeaders`
+# middleware in src/middleware/headers.ts never sees them. Anything that matters for a static
+# script has to be stated here instead.
+
+/dist/*
+  # The only asset served from this Worker is a JavaScript bundle. Sniffing cannot improve on
+  # that and can only get it wrong.
+  X-Content-Type-Options: nosniff
+  # Content-addressed in practice: /docs requests it with ?v=<version>, and a new version of
+  # @scalar/api-reference changes that query string. Safe to cache for a year.
+  Cache-Control: public, max-age=31536000, immutable
+  # Nothing needs to embed this cross-origin.
+  Cross-Origin-Resource-Policy: same-origin

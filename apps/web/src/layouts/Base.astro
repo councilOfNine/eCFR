@@ -1,0 +1,78 @@
+---
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+/**
+ * The only layout. Every page is a document, so there is one shell and no variants.
+ *
+ * Nothing here fetches. `atlas()` reads the resolved snapshot in Node during the build; by the
+ * time this HTML reaches a browser there is no data layer left to run.
+ */
+import { atlas } from '../data/load';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Marks the matching item in the primary nav. */
+  section?: 'dashboard' | 'agencies' | 'titles' | 'shared' | 'quality' | 'about';
+  /** Wide pages (the reader, big tables) opt out of the centred measure. */
+  wide?: boolean;
+}
+
+const { title, description, section, wide = false } = Astro.props;
+const data = await atlas();
+const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.canonicalOrigin);
+const fullTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical.href} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="generator" content={Astro.generator} />
+
+    {/*
+      Runs before first paint so a stored preference cannot flash the wrong theme. It is
+      `is:inline` on purpose: a hashed, deferred module would run after paint, which is exactly
+      the swap that produced the predecessor's 0.112 CLS.
+    */}
+    <script is:inline>
+      try {
+        const stored = localStorage.getItem('ecfr-theme');
+        if (stored === 'light' || stored === 'dark') {
+          document.documentElement.dataset.theme = stored;
+        }
+      } catch {
+        /* Storage blocked. The `color-scheme: light dark` default already handles this. */
+      }
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">{STRINGS.a11y.skipToMain}</a>
+
+    {
+      data.manifest.fixture && (
+        <div class="fixture-banner" role="status">
+          {STRINGS.banner.fixture}
+        </div>
+      )
+    }
+
+    <SiteHeader section={section} />
+
+    <main id="main" class="shell flex-1 py-8" data-wide={wide ? '' : undefined}>
+      <slot />
+    </main>
+
+    <SiteFooter />
+  </body>
+</html>

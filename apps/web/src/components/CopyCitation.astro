@@ -1,0 +1,72 @@
+---
+/**
+ * Copy-citation control for the reader.
+ *
+ * The citation text is always present and selectable in the DOM, so this works without JS by
+ * the oldest mechanism there is: select and copy. The button is added by its own script and
+ * only appears when the clipboard API is actually available — a button that silently fails is
+ * worse than no button, and this site's audience is people assembling citations for filings.
+ */
+import { STRINGS } from '../constants/strings';
+
+interface Props {
+  /** The citation itself, e.g. "40 CFR Part 60". */
+  citation: string;
+  /** Canonical eCFR URL, appended to the copied text so a pasted citation is verifiable. */
+  ecfrUrl: string;
+  /** Source date, so the copied citation records what it was current as of. */
+  sourceDate: string | null;
+}
+
+const { citation, ecfrUrl, sourceDate } = Astro.props;
+const copyText = [citation, ecfrUrl, sourceDate ? STRINGS.copyCitation.currentAsOf(sourceDate) : null]
+  .filter((part): part is string => part !== null)
+  .join(' — ');
+---
+
+{/*
+  The button/status labels ride on data attributes rather than being imported by the client
+  script: importing the strings module there would bundle the whole site's copy into a script
+  every reader downloads. Same pattern as ThemeToggle.
+*/}
+<div
+  class="flex flex-wrap items-center gap-2"
+  data-copy-citation
+  data-text={copyText}
+  data-label-copy={STRINGS.copyCitation.copyButton}
+  data-label-copied={STRINGS.copyCitation.copied}
+  data-label-blocked={STRINGS.copyCitation.blocked}
+>
+  <code
+    class="rounded border border-[color:var(--color-border)] bg-[color:var(--color-sunken)] px-2 py-1 font-mono text-xs"
+    >{citation}</code
+  >
+  <span class="text-xs text-[color:var(--color-ink-subtle)]" data-copy-status role="status"></span>
+</div>
+
+<script>
+  for (const host of document.querySelectorAll<HTMLElement>('[data-copy-citation]')) {
+    const text = host.dataset.text;
+    const status = host.querySelector<HTMLElement>('[data-copy-status]');
+    if (!text || !navigator.clipboard) continue;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'badge badge-accent';
+    button.textContent = host.dataset.labelCopy ?? '';
+    host.insertBefore(button, status);
+
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (status) status.textContent = host.dataset.labelCopied ?? '';
+      } catch {
+        // Permission denied or a non-secure context. Say so rather than pretending.
+        if (status) status.textContent = host.dataset.labelBlocked ?? '';
+      }
+      window.setTimeout(() => {
+        if (status) status.textContent = '';
+      }, 4000);
+    });
+  }
+</script>

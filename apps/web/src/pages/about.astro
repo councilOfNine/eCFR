@@ -1,0 +1,141 @@
+---
+import Callout from '../components/Callout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { formatDate } from '../data/format';
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+/**
+ * Attribution and disclaimers.
+ *
+ * Three distinct disclaimers live here and each one is doing different work:
+ *   1. This is not an official edition of anything.
+ *   2. The eCFR itself is not the official CFR — an easy thing for a reader to get wrong when
+ *      the interface looks authoritative.
+ *   3. The word counts are this project's own derived measurements and are published by no
+ *      government body.
+ * Collapsing them into one sentence would lose the third, which is the one this site most needs
+ * to make.
+ *
+ * The essay paragraphs stay inline while the headings and the callout titles live in STRINGS.
+ * Each of these sentences wraps a link, a `<strong>` or an `<em>` around its own middle, and a
+ * disclaimer split into fragments is both unreadable here and untranslatable there.
+ */
+import Base from '../layouts/Base.astro';
+
+const { manifest } = await atlas();
+---
+
+<Base
+  title={STRINGS.about.title}
+  description={STRINGS.about.description}
+  section="about"
+>
+  <PageHeader
+    eyebrow={STRINGS.about.eyebrow}
+    title={STRINGS.about.heading}
+    standfirst={STRINGS.about.standfirst}
+  />
+
+  <div class="prose-page">
+    <h2>{STRINGS.about.headings.whatThisIs}</h2>
+    <p>
+      eCFR Atlas measures the Code of Federal Regulations and publishes the results: how many
+      words each agency's regulations run to, where jurisdiction overlaps, how often each part
+      changes, and the full text of every part with a citation you can copy. It is optimised for
+      lookup, citation and export rather than for browsing.
+    </p>
+    <p>
+      It exists because the obvious version of this site is easy to build wrongly. Its predecessor
+      published word counts it had inferred rather than measured, and stored them in the same
+      place as the real ones — so “we could not measure this” and “we measured 104,642” became
+      indistinguishable a layer downstream. Everything about the current design, down to the
+      shape of the database columns, is arranged so that cannot recur.
+    </p>
+
+    <h2>{STRINGS.about.headings.dataSource}</h2>
+    <p>
+      All source material comes from the <strong>Electronic Code of Federal Regulations</strong>
+      public API at <a href={SITE.ecfrHomeUrl} rel="external noopener">ecfr.gov</a>. The eCFR
+      is a joint project of the <strong>Office of the Federal Register</strong> (National Archives
+      and Records Administration) and the <strong>Government Publishing Office</strong>. Related
+      material is published through <a href="https://www.govinfo.gov" rel="external noopener">
+      govinfo.gov</a>.
+    </p>
+    <p>
+      Federal government works are not subject to copyright in the United States. This project
+      adds measurements, structure and presentation; the underlying regulatory text belongs to the
+      public.
+    </p>
+    <p>
+      {
+        manifest.fixture
+          ? STRINGS.about.buildFromFixture
+          : manifest.source_date
+            ? STRINGS.about.buildAsOf(formatDate(manifest.source_date))
+            : STRINGS.about.buildDateUnknown
+      }
+    </p>
+
+    <h2>{STRINGS.about.headings.disclaimers}</h2>
+
+    <Callout tone="unknown" title={STRINGS.about.disclaimer1Title}>
+      <p>
+        eCFR Atlas is an independent open-source project. It is not affiliated with, endorsed by,
+        sponsored by or an official publication of the United States Government, the National
+        Archives and Records Administration, the Office of the Federal Register or the Government
+        Publishing Office.
+      </p>
+    </Callout>
+
+    <Callout tone="unknown" class="mt-3" title={STRINGS.about.disclaimer2Title}>
+      <p>
+        The eCFR is an editorial compilation maintained for the public's convenience and is
+        <em>not</em> an official legal edition of the Code of Federal Regulations. Only the annual
+        printed CFR and the daily Federal Register are authoritative for legal purposes. If a
+        deadline or a legal obligation turns on the exact text, verify it against those.
+      </p>
+    </Callout>
+
+    <Callout tone="unknown" class="mt-3" title={STRINGS.about.disclaimer3Title}>
+      <p>
+        No government body publishes a word count of the CFR. Every count on this site is a
+        <strong>derived measurement produced by this project's own parser</strong>, under the rules
+        set out on <a href={route.methodology()}>methodology</a>. They are reproducible and the
+        code is open, but they are not official statistics and should not be cited as such. Cite
+        them as eCFR Atlas measurements, with the source date.
+      </p>
+      <p class="mt-2">
+        Where a value could not be measured, this site shows an em dash and the reason — never a
+        zero. What is missing is enumerated on <a href={route.dataQuality()}>data quality</a>.
+      </p>
+    </Callout>
+
+    <h2>{STRINGS.about.headings.citing}</h2>
+    <p>
+      For a figure: <em>eCFR Atlas, “{`{page title}`}”, measurement current as of
+      {manifest.source_date ? ` ${manifest.source_date}` : ' {source date}'}, ecfr-atlas.org.</em>
+    </p>
+    <p>
+      For regulation text: cite the CFR itself, and verify against the official sources above. The
+      copy-citation control on every part page produces a citation with the eCFR link and the
+      source date already in it.
+    </p>
+
+    <h2>{STRINGS.about.headings.privacy}</h2>
+    <p>
+      This site is static HTML served from a CDN. It sets no cookies, runs no analytics, embeds no
+      third-party scripts, and loads no external fonts or images. The only thing it stores in your
+      browser is your light/dark theme preference, and only if you change it from the default.
+    </p>
+
+    <h2>{STRINGS.about.headings.contributing}</h2>
+    <p>
+      The pipeline, the API and this site are open source. Corrections to the measurement rules are
+      especially welcome: if you think the tokenisation or the exclusion list is wrong, the
+      argument is worth having in public. See <a href={route.apiPage()}>the API page</a> for
+      programmatic access and <a href={route.methodology()}>methodology</a> for the current rules.
+    </p>
+  </div>
+</Base>

@@ -1,0 +1,21 @@
+// Rule 3 of this repository's non-negotiables: never build a RegExp from a non-literal.
+//
+// The predecessor's /diff route interpolated a user-supplied `?sections=` parameter into
+// `new RegExp(...)` after escaping only '.', which was an unauthenticated ReDoS — 2,462 ms
+// of CPU on a 1,600-character payload. A literal pattern is always fine; anything dynamic
+// has to be argued for in review via a `// biome-ignore` with a written justification,
+// which puts the reason next to the escape hatch and into the diff.
+//
+// This plugin replaces the eslint `no-restricted-syntax` selector that enforced the same
+// rule before the Biome migration.
+language js
+
+or {
+  `new RegExp($pattern)`,
+  `new RegExp($pattern, $_flags)`,
+  `RegExp($pattern)`,
+  `RegExp($pattern, $_flags)`
+} where {
+  not or { $pattern <: string(), $pattern <: `/$_/` },
+  register_diagnostic(span=$pattern, message="Do not build a RegExp from a non-literal. Interpolating user input here is a ReDoS (this is exactly how the predecessor /diff route was vulnerable). Use string methods, or escape and justify with a biome-ignore comment.", severity="error")
+}

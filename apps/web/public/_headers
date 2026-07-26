@@ -1,0 +1,43 @@
+# Response headers for every asset this site serves.
+#
+# Cloudflare Workers Static Assets reads this file from the root of the uploaded directory.
+# @astrojs/cloudflare appends its own `/_astro/*` immutable-cache rule to whatever is here, so
+# both rules end up in dist/client/_headers and both apply.
+#
+# ─── the CSP ─────────────────────────────────────────────────────────────────────────────────
+#
+# `{{INLINE_SCRIPT_HASHES}}` is a build-time placeholder. scripts/build-headers.mjs replaces it
+# with a `'sha256-…'` for every distinct inline <script> in the built HTML, computed from the
+# real output, and scripts/check-headers.mjs then fails the build if any inline script in dist
+# is not covered. Hard-coding the hashes here instead would be unmaintainable: Astro inlines the
+# bundled component scripts (the theme toggle, the part table of contents, the agency table's
+# filter and sort), so their hashes change with any edit to those components. Deriving them from
+# the output is the only version that cannot silently drift out of date.
+#
+# If the placeholder ever survives into a deploy, the CSP degrades safely — an unrecognised
+# source expression is ignored, leaving `script-src 'self'`, which blocks the inline scripts and
+# loses the progressive enhancement rather than opening a hole. The build fails first.
+#
+# `style-src` carries 'unsafe-inline' and that is a deliberate, bounded exception. The bar charts
+# and the amendment timeline set a computed width/height in a `style` attribute — that is how the
+# chart geometry is laid out in the same paint as the text, which is what keeps CLS at zero. CSP
+# hashes do not cover style ATTRIBUTES, only <style> blocks, and there are no <style> blocks in
+# the output at all. `style-src-attr 'unsafe-inline'` would be the tighter spelling, but Firefox
+# does not implement `style-src-attr` and falls back to `style-src`, which would leave every bar
+# chart collapsed for Firefox readers. No inline style value on this site contains anything but a
+# percentage or a rem length computed at build time from our own data.
+#
+# Everything else is 'none' or 'self': the site has no images, no web fonts, no forms, no frames,
+# and makes no network requests after load. In particular it never talks to ecfr.gov from a
+# reader's browser — `connect-src 'self'` makes that a browser-enforced property of the deployed
+# site, not just a convention in the source.
+
+/*
+  Content-Security-Policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self' {{INLINE_SCRIPT_HASHES}}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()

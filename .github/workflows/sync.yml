@@ -1,0 +1,331 @@
+name: Nightly sync
+
+# The only writer in the system. Fetches the eCFR delta, applies it to D1, pushes changed text
+# to R2, rebuilds the site and deploys it.
+#
+# WHY THIS RUNS HERE AND NOT IN A WORKER: title 40's XML is 156,946,999 bytes and title 26
+# decodes to ~174 MB as a V8 two-byte string. A Worker isolate has 128 MB. There is no way to
+# hold a large title in a Worker, so the pipeline is a plain Node process on a runner with real
+# memory. Cloudflare Cron Triggers are the obvious-looking answer and they cannot do this job.
+#
+# The pipeline is self-contained: scripts/sync/lib/d1.ts shells out to `wrangler d1 execute`
+# per unit and scripts/sync/lib/r2.ts signs its own SigV4 PUTs, both interleaved with the work
+# so that each title's writes land before the next title starts. This workflow therefore
+# supplies credentials and reads an exit code; it does not apply SQL or upload objects itself.
+on:
+  schedule:
+    # 07:00 UTC, Monday–Friday only. eCFR publishes on BUSINESS DAYS: 57 issue dates in an
+    # observed 84-day window, zero of them a weekend. A Saturday run is guaranteed to find
+    # nothing, and every run spends someone's rate-limit budget.
+    - cron: '0 7 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Fetch, parse and validate everything, but apply nothing and do not deploy'
+        type: boolean
+        default: false
+      cold_cache:
+        description: 'Ignore the checkpoint cache and re-derive every title from scratch'
+        type: boolean
+        default: false
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# GITHUB DISABLES SCHEDULED WORKFLOWS IN PUBLIC REPOS AFTER EXACTLY 60 DAYS WITH NO REPOSITORY
+# ACTIVITY, and the disable takes out the WHOLE FILE — `workflow_dispatch` included — with no
+# notification beyond one email. A quiet summer is enough to silently stop the nightly.
+#
+# The Healthchecks.io ping below is therefore not "nice observability", it is the actual
+# guarantee that this job is alive. It is the only mechanism that alerts on a run that never
+# STARTED; GitHub can only tell you about runs that ran and failed. Configure the check with a
+# cron schedule matching the one above so weekends are not counted as misses, and a grace period
+# of a few hours.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+permissions:
+  contents: read
+
+# Never cancel a sync in flight. A half-applied delta is recoverable — insert-then-prune leaves
+# a superset of the truth and the publish pointer never advanced — but only if the run is
+# allowed to finish or fail on its own terms.
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+# `-o pipefail` is not the default for `run:` steps. Without it a piped command reports the exit
+# status of the last stage and a failed sync can look green.
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Consumed by scripts/sync/lib/config.ts.
+  ECFR_D1_DATABASE: ecfr-atlas
+  ECFR_WRANGLER_CONFIG: apps/api/wrangler.jsonc
+  SYNC_CACHE_DIR: .sync-cache
+  SYNC_OUT_DIR: sync-output
+  # Sustained <=8 req/s is clean at any parallelism; ~10 req/s is the observed onset of 429s.
+  ECFR_MAX_RPS: '8'
+  WEB_CONFIG: apps/web/wrangler.jsonc
+  # Bump this to invalidate every checkpoint cache at once, without editing the key by hand.
+  CACHE_EPOCH: v1
+
+jobs:
+  sync:
+    name: fetch · apply · deploy
+    runs-on: ubuntu-latest
+    # Generous: a delta is usually minutes, but a day where many titles moved, plus eCFR's ~50 s
+    # origin timeouts and the retry budget, can stretch a long way. GitHub's ceiling is 360.
+    timeout-minutes: 240
+    steps:
+      # Dead-man's switch: /start first, so a run that dies mid-way is distinguishable from one
+      # that never began.
+      - name: Healthcheck /start
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_SYNC_URL }}
+        run: |
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            curl -fsS -m 10 --retry 3 --retry-delay 2 "$HEALTHCHECK_URL/start" || true
+          else
+            echo "HEALTHCHECK_SYNC_URL not set — this sync is unmonitored." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter=./packages/** build
+
+      # Per-title checkpoints are keyed on a hash of the structure JSON, so a restored cache can
+      # only ever let the pipeline SKIP work it has already verified as unchanged — it cannot
+      # make it accept stale data. Cold-starting rehydrates the node store from D1, which is
+      # slow but always correct, so the cache is a pure optimisation and safe to throw away.
+      - name: Restore sync checkpoints
+        if: ${{ !inputs.cold_cache }}
+        uses: actions/cache@v5
+        with:
+          path: .sync-cache
+          key: sync-cache-${{ env.CACHE_EPOCH }}-${{ github.run_id }}
+          restore-keys: |
+            sync-cache-${{ env.CACHE_EPOCH }}-
+
+      # Exit codes from scripts/sync/delta.ts:
+      #   0  synced and the publish gate advanced published_run_id
+      #   1  synced, but the gate REFUSED to publish (a data-quality regression — do not deploy)
+      #   2  the run failed
+      #   75 eCFR reported import_in_progress (EX_TEMPFAIL: the corpus is mid-write upstream;
+      #      nothing is wrong here and there is nothing to retry today)
+      - name: Run delta
+        id: delta
+        env:
+          # `--remote` is mandatory: config.ts defaults to --local precisely so that a
+          # contributor running the pipeline by hand cannot write to production by omission.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # `ecfr-atlas-content` is the canonical name — the same bucket apps/api binds as
+          # CONTENT and reads part bodies out of. This used to default to `ecfr-atlas-text`,
+          # which meant the writer and the reader named different buckets for the same objects:
+          # a sync would appear to succeed while /v1/parts served `content.url: null` forever.
+          # See docs/ARCHITECTURE.md § Buckets before changing it.
+          R2_BUCKET: ${{ vars.R2_CONTENT_BUCKET || 'ecfr-atlas-content' }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          # eCFR asks automated clients to identify themselves and to be contactable.
+          ECFR_USER_AGENT: 'ecfr-atlas-sync/0.1 (+https://github.com/${{ github.repository }}; nightly corpus sync)'
+          # Read by packages/ecfr when a caller does not pass an explicit User-Agent.
+          ECFR_CONTACT_URL: '${{ github.server_url }}/${{ github.repository }}'
+          # The pipeline's default is `.sync-cache/snapshot` (config.ts), which is INSIDE the
+          # restored checkpoint cache and is not where the two steps below look. Both the
+          # "Assert a real snapshot exists" guard and the Astro build read
+          # `sync-output/snapshot`, so the writer has to be pointed at the same place. Leaving
+          # it unset means the guard fails a run that actually succeeded — or, far worse, that
+          # the guard passes on a stale snapshot restored from last night's cache.
+          ECFR_SNAPSHOT_DIR: ${{ github.workspace }}/sync-output/snapshot
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # Dispatch inputs arrive through `env`, never spliced into the script body, and the
+          # argv is an array. Neither matters much for a boolean, but the habit is what stops
+          # the next person adding a free-text input straight into a command line.
+          args=(--remote)
+          if [ "${DRY_RUN:-false}" = "true" ]; then args+=(--dry-run); fi
+
+          set +e
+          node --max-old-space-size=8192 scripts/sync/delta.ts "${args[@]}"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+          case "$code" in
+            0)  echo "outcome=published"    >> "$GITHUB_OUTPUT" ;;
+            1)  echo "outcome=gate-refused" >> "$GITHUB_OUTPUT" ;;
+            75) echo "outcome=upstream-importing" >> "$GITHUB_OUTPUT" ;;
+            *)  echo "outcome=failed"       >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Summarise outcome
+        if: always()
+        env:
+          OUTCOME: ${{ steps.delta.outputs.outcome }}
+          CODE: ${{ steps.delta.outputs.code }}
+        run: |
+          {
+            echo "## Sync outcome: \`${OUTCOME:-crashed}\` (exit ${CODE:-?})"
+            echo
+            case "${OUTCOME:-}" in
+              published)
+                echo 'The publish gate advanced. The site will be rebuilt and deployed.' ;;
+              gate-refused)
+                echo 'The pipeline ran but the publish gate **refused to advance** the published'
+                echo 'run. Readers keep the last good snapshot. Nothing is deployed. This is the'
+                echo 'gate working — find out which quality check tripped before overriding it.' ;;
+              upstream-importing)
+                echo 'eCFR reported `import_in_progress`. The corpus is being rewritten upstream'
+                echo 'and capturing it now would store a half-written snapshot. Not an error;'
+                echo 'the next scheduled run picks it up.' ;;
+              *)
+                echo 'The run failed. See the log above.' ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f sync-output/render-manifest.json ]; then
+            {
+              echo
+              echo '<details><summary>Render manifest</summary>'
+              echo
+              echo '```json'
+              head -c 60000 sync-output/render-manifest.json
+              echo
+              echo '```'
+              echo
+              echo '</details>'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Anything other than a clean publish stops here: a gate refusal must not reach production,
+      # and an upstream import is simply a no-op day.
+      - name: Stop unless the gate published
+        if: steps.delta.outputs.outcome != 'published'
+        run: |
+          if [ "${{ steps.delta.outputs.outcome }}" = "upstream-importing" ]; then
+            echo "::notice title=eCFR mid-import::Nothing to sync today; exiting cleanly."
+            exit 0
+          fi
+          echo "::error title=Not publishing::Sync outcome was '${{ steps.delta.outputs.outcome }}'."
+          exit 1
+
+      # The site is built from the JSON snapshot the pipeline emits — the only source that
+      # carries regulation body text, because D1 holds an R2 pointer rather than the text.
+      #
+      # This guard is the most important step in the file. apps/web/src/data/load.ts falls back
+      # to the committed fixture when no data source is configured, and the fixture's numbers are
+      # invented. Deploying a fixture build to production would publish fabricated measurements
+      # under the real domain — the exact failure this whole project exists to prevent — so a
+      # missing snapshot fails the run rather than silently degrading.
+      - name: Assert a real snapshot exists
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if [ ! -d "$SYNC_OUT_DIR/snapshot" ]; then
+            echo "::error title=No snapshot::$SYNC_OUT_DIR/snapshot was not produced. Refusing to build, because apps/web would silently fall back to the committed fixture and publish invented numbers."
+            exit 1
+          fi
+
+      - name: Build site
+        if: ${{ !inputs.dry_run }}
+        env:
+          ECFR_SNAPSHOT_DIR: ${{ github.workspace }}/sync-output/snapshot
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm build
+
+      # Deploying an over-budget build fails inside wrangler AFTER D1 and R2 are already written,
+      # leaving the site stale against fresh data. Catch it before the upload.
+      - name: Assert static-asset budget
+        if: ${{ !inputs.dry_run }}
+        # dist/CLIENT, matching ci.yml and apps/web/wrangler.jsonc's `assets.directory`.
+        # @astrojs/cloudflare splits its output; `apps/web/dist` is the wrong tree and would
+        # have measured a budget the deploy does not use.
+        run: node scripts/ci/check-asset-count.ts apps/web/dist/client
+
+      - name: Deploy site
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler deploy \
+            --config "$WEB_CONFIG" \
+            --message "sync ${{ github.run_id }}"
+
+      - name: Upload sync artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sync-output-${{ github.run_id }}
+          # The generated SQL and the render manifest. Never the rendered bodies — those are
+          # hundreds of megabytes and already in R2.
+          path: |
+            sync-output/**/*.sql
+            sync-output/render-manifest.json
+            asset-budget.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Healthcheck success
+        if: success() && !inputs.dry_run
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_SYNC_URL }}
+          OUTCOME: ${{ steps.delta.outputs.outcome }}
+        run: |
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            curl -fsS -m 10 --retry 3 --retry-delay 2 \
+              --data-raw "outcome=$OUTCOME run=${{ github.run_id }}" "$HEALTHCHECK_URL" || true
+          fi
+
+      - name: Healthcheck failure
+        if: failure() || cancelled()
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_SYNC_URL }}
+          OUTCOME: ${{ steps.delta.outputs.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -n "$HEALTHCHECK_URL" ]; then
+            curl -fsS -m 10 --retry 3 --retry-delay 2 \
+              --data-raw "sync ${OUTCOME:-crashed}: $RUN_URL" "$HEALTHCHECK_URL/fail" || true
+          fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# REQUIRED SECRETS AND VARIABLES
+#
+#   CLOUDFLARE_API_TOKEN    A SCOPED account API token. These permissions, and nothing more:
+#                             Account · Workers Scripts   : Edit   (deploy the site)
+#                             Account · D1                : Edit   (apply the delta)
+#                             Account · Account Settings  : Read   (wrangler needs it)
+#                           NEVER use a Global API Key. A global key authenticates as the entire
+#                           Cloudflare account — DNS, billing, every zone — and cannot be scoped,
+#                           so one leaked CI log is a total account compromise with no way to
+#                           limit the damage short of rotating everything. A scoped token can be
+#                           revoked on its own and can only touch this project.
+#
+#   CLOUDFLARE_ACCOUNT_ID   Also used as R2_ACCOUNT_ID; R2's S3 endpoint is account-scoped.
+#   R2_ACCESS_KEY_ID        R2 API token for the S3-compatible endpoint, scoped to the CONTENT
+#   R2_SECRET_ACCESS_KEY    bucket (`ecfr-atlas-content`) with Object Read & Write. Separate
+#                           from the token above because the pipeline signs SigV4 itself rather
+#                           than using wrangler.
+#   HEALTHCHECK_SYNC_URL    Healthchecks.io ping URL. See the note at the top of this file:
+#                           this is the only thing that notices a run that never happened.
+#
+#   vars.R2_CONTENT_BUCKET  Optional repository variable; defaults to `ecfr-atlas-content`. It
+#                           must name the SAME bucket that apps/api/wrangler.jsonc binds as
+#                           CONTENT — this workflow is the writer, that Worker is the reader,
+#                           and nothing at deploy time checks that they agree.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
