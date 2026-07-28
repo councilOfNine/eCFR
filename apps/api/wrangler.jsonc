@@ -3,6 +3,15 @@
   "name": "ecfr-atlas-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
+
+  // Same hostname as the site, split by path, so API consumers get a guessable URL and /docs
+  // is same-origin (no CORS preflight on the reference page). More specific than the site's
+  // `/*`, so these win.
+  "routes": [
+    { "pattern": "ecfr.fixit.works/v1/*", "zone_name": "fixit.works" },
+    { "pattern": "ecfr.fixit.works/docs", "zone_name": "fixit.works" },
+    { "pattern": "ecfr.fixit.works/openapi.json", "zone_name": "fixit.works" }
+  ],
   // fast-xml-parser reaches for a couple of Node builtins on its CJS path. The flag costs
   // nothing at runtime and keeps the /diff parser from being the reason a deploy fails.
   "compatibility_flags": ["nodejs_compat"],
@@ -87,14 +96,14 @@
     "ENVIRONMENT": "production",
     // Browser origin allowed to call the account-management routes with credentials. The
     // read-only /v1 data routes are open to `*`; key management is not.
-    "SITE_ORIGIN": "https://ecfr-atlas.org",
+    "SITE_ORIGIN": "https://ecfr.fixit.works",
     // Public base for R2-hosted part content. Empty means "no public route configured", and
     // /v1/parts then returns `content.url: null` rather than a URL that 404s.
     "PUBLIC_CONTENT_BASE_URL": "",
     // eCFR asks for a descriptive User-Agent with a contact URL, and rate-limits harder
     // without one. Only /v1/diff ever sends it.
     "ECFR_USER_AGENT": "ecfr-atlas/0.1 (+https://github.com/councilOfNine/eCFR)",
-    "DOCS_URL": "https://api.ecfr-atlas.org/docs"
+    "DOCS_URL": "https://ecfr.fixit.works/docs"
   },
 
   // SECRETS — set with `wrangler secret put <NAME>`, never in this file.
@@ -136,10 +145,10 @@
       "name": "ecfr-atlas-api-staging",
       "vars": {
         "ENVIRONMENT": "staging",
-        "SITE_ORIGIN": "https://staging.ecfr-atlas.org",
+        "SITE_ORIGIN": "https://staging-ecfr.fixit.works",
         "PUBLIC_CONTENT_BASE_URL": "",
         "ECFR_USER_AGENT": "ecfr-atlas-staging/0.1 (+https://github.com/councilOfNine/eCFR)",
-        "DOCS_URL": "https://staging-api.ecfr-atlas.org/docs"
+        "DOCS_URL": "https://staging-ecfr.fixit.works/docs"
       }
     }
   }

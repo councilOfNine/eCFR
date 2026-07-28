@@ -241,7 +241,7 @@ describe('no user-facing route reaches ecfr.gov', () => {
         method: route.method,
         headers: {
           'Content-Type': 'application/json',
-          Origin: 'https://ecfr-atlas.org',
+          Origin: 'https://ecfr.fixit.works',
           'CF-Connecting-IP': '203.0.113.8',
         },
         body: route.method === 'DELETE' ? undefined : '{}',

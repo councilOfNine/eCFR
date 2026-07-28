@@ -3,6 +3,11 @@
   "name": "ecfr-atlas-web",
   "compatibility_date": "2026-07-01",
 
+  // ecfr.fixit.works, everything except the paths apps/api claims. Cloudflare matches the most
+  // specific route first, so the API's three patterns win over this catch-all without any
+  // ordering config. Static-asset requests never invoke a Worker and are not billed.
+  "routes": [{ "pattern": "ecfr.fixit.works/*", "zone_name": "fixit.works" }],
+
   // Assets-only Worker: no `main`, no script. Every route in this app is prerendered, so there
   // is nothing to execute per request — Cloudflare serves the file from its edge cache and the
   // request never reaches a Worker isolate. That is also what keeps rule 4 structurally true:

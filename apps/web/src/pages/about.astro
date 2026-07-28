@@ -115,7 +115,7 @@ const { manifest } = await atlas();
     <h2>{STRINGS.about.headings.citing}</h2>
     <p>
       For a figure: <em>eCFR Atlas, “{`{page title}`}”, measurement current as of
-      {manifest.source_date ? ` ${manifest.source_date}` : ' {source date}'}, ecfr-atlas.org.</em>
+      {manifest.source_date ? ` ${manifest.source_date}` : ' {source date}'}, {SITE.canonicalOrigin.replace('https://', '')}.</em>
     </p>
     <p>
       For regulation text: cite the CFR itself, and verify against the official sources above. The

@@ -21,9 +21,9 @@ export const SITE = {
   /** The one-line description beside the brand in the header. */
   tagline: env.PUBLIC_SITE_TAGLINE ?? 'a measured map of federal regulation',
   /** Canonical origin for `<link rel="canonical">`, og:url and the sitemap. No trailing slash. */
-  canonicalOrigin: env.PUBLIC_SITE_URL ?? 'https://ecfr-atlas.org',
+  canonicalOrigin: env.PUBLIC_SITE_URL ?? 'https://ecfr.fixit.works',
   /** Public origin of the API Worker (apps/api), linked from /api. Never fetched at runtime. */
-  apiOrigin: env.PUBLIC_API_ORIGIN ?? 'https://api.ecfr-atlas.org',
+  apiOrigin: env.PUBLIC_API_ORIGIN ?? 'https://ecfr.fixit.works',
   /** Where the source lives, for attribution and contributing links. */
   repoUrl: env.PUBLIC_REPO_URL ?? 'https://github.com/councilOfNine/eCFR',
   /** Contact for the deployment operator. Null renders no contact affordance. */
