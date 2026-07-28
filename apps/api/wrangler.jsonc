@@ -15,7 +15,15 @@
   // fast-xml-parser reaches for a couple of Node builtins on its CJS path. The flag costs
   // nothing at runtime and keeps the /diff parser from being the reason a deploy fails.
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  // Off deliberately. With it on, the API is also reachable at
+  // ecfr-atlas-api.<subdomain>.workers.dev, which bypasses the zone: rate-limit buckets,
+  // analytics and any future WAF rule are keyed per hostname, so a public API on two
+  // hostnames is a public API with two independent quotas. One front door.
+  "workers_dev": false,
+  // Same reasoning for per-version preview URLs, which wrangler enables by default whenever
+  // workers_dev is unset. Preview deploys go through `wrangler versions upload` in CI, which
+  // prints its own URL for a reviewer; nothing needs a standing public alias.
+  "preview_urls": false,
 
   // Traces on every request. This Worker is the only part of the system that serves live
   // traffic, so sampling it down would mean debugging a 429 report with no 429 in the logs.
