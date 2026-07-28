@@ -213,6 +213,17 @@ export const corpusUnknownReason = (unknownTitles: number, titles: number): stri
 export const corpusTotalUnstatedReason = (unknownTitles: number, titles: number): string =>
   `${unknownTitles} of ${titles} titles have no measured word count, so the corpus total cannot be stated`;
 
+/**
+ * The corpus rollups are summed over AGENCIES, not over an agency's scopes, so they cannot
+ * borrow `NO_CLAIMED_SCOPES_REASON` — on an empty database that answered a corpus-level
+ * question with "this agency claims no CFR scopes".
+ */
+export const NO_AGENCIES_REASON =
+  'no agencies have been synced yet, so there is nothing to roll up';
+
+export const corpusAgenciesUncountedReason = (uncounted: number, total: number): string =>
+  `${uncounted} of ${total} agencies have no measured word count`;
+
 // ─── diff notes (src/diff/service.ts) ────────────────────────────────────────
 //
 // `note` on an `unavailable` or `too_large` diff is the consumer's only explanation, and the

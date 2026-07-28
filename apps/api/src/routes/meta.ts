@@ -11,14 +11,19 @@
  */
 
 import { unavailable } from '@ecfr-atlas/core';
+import type { WordCount } from '@ecfr-atlas/core/api-schemas';
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi';
 import { ECFR_BASE_URL, TIERS } from '../constants/config.js';
-import { corpusUnknownReason } from '../constants/messages.js';
+import {
+  corpusAgenciesUncountedReason,
+  corpusUnknownReason,
+  NO_AGENCIES_REASON,
+} from '../constants/messages.js';
 import { getAppMeta, getCorpusCounts, getUnknownNodeBreakdown } from '../db/meta.js';
 import { API_TIERS, CountMethod, WordCountStatus } from '../enums.js';
 import type { AppEnv } from '../env.js';
 import { MetaOut } from '../schemas.js';
-import { rollupWordCount, toWordCount } from '../wire.js';
+import { toWordCount } from '../wire.js';
 import { commonErrors } from './shared.js';
 
 interface SyncRunRow {
@@ -50,6 +55,32 @@ const route = createRoute({
     ...commonErrors,
   },
 });
+
+/**
+ * A corpus total, explained at corpus altitude.
+ *
+ * The per-agency helper in wire.ts reasons about one agency's claimed scopes. These figures sum
+ * over agencies, so an unknown here means "some agency has no measured total", never "this
+ * agency claims nothing".
+ */
+function corpusRollup(words: number | null, unknownAgencies: number, agencies: number): WordCount {
+  if (words !== null) {
+    return toWordCount({
+      known: true,
+      words,
+      status: WordCountStatus.RolledUp,
+      method: CountMethod.DescendantSum,
+    });
+  }
+  return toWordCount(
+    unavailable(
+      WordCountStatus.NotComputed,
+      agencies === 0
+        ? NO_AGENCIES_REASON
+        : corpusAgenciesUncountedReason(unknownAgencies, agencies),
+    ),
+  );
+}
 
 export function registerMetaRoutes(app: OpenAPIHono<AppEnv>): void {
   app.openapi(route, async (c) => {
@@ -109,14 +140,17 @@ export function registerMetaRoutes(app: OpenAPIHono<AppEnv>): void {
           total_words_deduplicated: counts.deduplicated_words,
           // …and the same figures with the status this API guarantees on every number.
           total_words: corpusWords,
-          total_words_attributed_status: rollupWordCount(
+          // NOT rollupWordCount: that derives its reason from ONE AGENCY's scope counters and
+          // says "this agency claims no CFR scopes", which is the wrong noun for a figure summed
+          // across every agency. An empty database made that visible on the live endpoint.
+          total_words_attributed_status: corpusRollup(
             counts.attributed_words,
-            counts.agencies - counts.attributed_unknown,
+            counts.attributed_unknown,
             counts.agencies,
           ),
-          total_words_deduplicated_status: rollupWordCount(
+          total_words_deduplicated_status: corpusRollup(
             counts.deduplicated_words,
-            counts.agencies - counts.deduplicated_unknown,
+            counts.deduplicated_unknown,
             counts.agencies,
           ),
           unknown_by_status: unknownByStatus,

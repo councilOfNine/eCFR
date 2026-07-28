@@ -120,9 +120,13 @@ export async function getCorpusCounts(db: D1Database): Promise<CorpusCounts> {
       // the LEFT JOIN yields NULL — but reserved is a KNOWN zero, not an unknown. Without the
       // reserved carve-out the corpus total is permanently unpublishable, because exactly one
       // title can never have a measured node.
+      // COALESCE on the COUNTER, never on the total. An aggregate over zero rows yields NULL,
+      // so on an empty database `unknown` arrived as null and rendered as "null of 0 titles".
+      // The total stays nullable on purpose: with no titles the corpus total is genuinely
+      // unknown, and coalescing it to 0 would publish a measurement nobody made.
       `SELECT SUM(CASE WHEN t.reserved = 1 THEN COALESCE(n.word_count, 0)
                        ELSE n.word_count END) AS total,
-              SUM(CASE WHEN t.reserved = 0 AND n.word_count IS NULL THEN 1 ELSE 0 END) AS unknown
+              COALESCE(SUM(CASE WHEN t.reserved = 0 AND n.word_count IS NULL THEN 1 ELSE 0 END), 0) AS unknown
          FROM title t
          LEFT JOIN structure_node n
                 ON n.title_number = t.number AND n.node_type = 'title'`,
@@ -138,10 +142,11 @@ export async function getCorpusCounts(db: D1Database): Promise<CorpusCounts> {
     // write over the narrowed table. The LEFT JOIN collapses "no row" and "NULL count" into the
     // same NULL, so either one flips the published figure to unknown-with-a-reason.
     db.prepare(
+      // Same COALESCE reasoning as the title sum above: counters to 0, totals left nullable.
       `SELECT SUM(r.attributed_word_count)   AS attributed,
-              SUM(CASE WHEN r.attributed_word_count   IS NULL THEN 1 ELSE 0 END) AS attributed_unknown,
+              COALESCE(SUM(CASE WHEN r.attributed_word_count   IS NULL THEN 1 ELSE 0 END), 0) AS attributed_unknown,
               SUM(r.deduplicated_word_count) AS deduplicated,
-              SUM(CASE WHEN r.deduplicated_word_count IS NULL THEN 1 ELSE 0 END) AS deduplicated_unknown
+              COALESCE(SUM(CASE WHEN r.deduplicated_word_count IS NULL THEN 1 ELSE 0 END), 0) AS deduplicated_unknown
          FROM agency a
          LEFT JOIN agency_rollup r ON r.agency_slug = a.slug`,
     ),
