@@ -60,6 +60,31 @@ export function parseWranglerJson<T>(stdout: string): Array<WranglerResult<T>> {
   }
 }
 
+/**
+ * Pull the human sentence out of wrangler's `--json` error envelope.
+ *
+ * Shape is `{"error":{"text":"no such table: sync_run: SQLITE_ERROR"}}`, emitted on stdout
+ * with a non-zero exit. Returns null for anything else so the caller can fall back to the
+ * raw streams rather than inventing a message.
+ */
+function extractWranglerError(stdout: string): string | null {
+  const start = stdout.indexOf('{');
+  if (start === -1) return null;
+  try {
+    const parsed: unknown = JSON.parse(stdout.slice(start));
+    if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
+      const err = (parsed as { error: unknown }).error;
+      if (typeof err === 'string') return err;
+      if (typeof err === 'object' && err !== null && 'text' in err) {
+        return String((err as { text: unknown }).text);
+      }
+    }
+  } catch {
+    // Not JSON — a crash or a usage error. The caller falls back to the raw streams.
+  }
+  return null;
+}
+
 export class D1 {
   #config: SyncConfig;
   #log: Logger;
@@ -102,13 +127,26 @@ export class D1 {
       });
       return stdout;
     } catch (error) {
-      // execFile attaches stderr to the rejection; it carries wrangler's actual complaint,
-      // which is the only useful part of a failure here.
-      const stderr =
-        typeof error === 'object' && error !== null && 'stderr' in error
-          ? String(error.stderr)
+      // BOTH streams, because wrangler splits them by mode. Under `--json` a SQL error is
+      // written to STDOUT as {"error":{"text":"..."}} and stderr is left EMPTY, so reading
+      // stderr alone — which this did — captured "" and produced a failure with no stated
+      // cause. That is how a missing table surfaced only as "wrangler d1 execute failed
+      // (open-run)" and cost a debugging session.
+      const streamOf = (key: 'stdout' | 'stderr'): string =>
+        typeof error === 'object' && error !== null && key in error
+          ? String((error as Record<string, unknown>)[key] ?? '')
           : '';
-      throw new D1Error(`wrangler d1 execute failed (${label})`, stderr);
+      const stdout = streamOf('stdout');
+      const stderr = streamOf('stderr');
+
+      // Lift wrangler's own sentence into the message. A caller reading a log line should not
+      // have to know which stream a given wrangler mode happens to use.
+      const detail = extractWranglerError(stdout) ?? (stderr.trim() || stdout.trim());
+      const suffix = detail ? `: ${detail}` : '';
+      throw new D1Error(
+        `wrangler d1 execute failed (${label})${suffix}`,
+        [stderr, stdout].filter(Boolean).join('\n').trim(),
+      );
     }
   }
 

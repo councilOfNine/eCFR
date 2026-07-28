@@ -25,6 +25,7 @@ const { loadConfig } = await import('./lib/config.js');
 const { createLogger } = await import('./lib/log.js');
 const { createContext, runDelta } = await import('./lib/pipeline.js');
 const { ImportInProgressError } = await import('./lib/delta.js');
+const { D1Error } = await import('./lib/d1.js');
 
 const config = loadConfig();
 const log = createLogger('delta');
@@ -49,6 +50,11 @@ try {
   log.error('delta failed', {
     error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
   });
+  // D1Error carries wrangler's raw output. Printing it is the difference between "execute
+  // failed" and "no such table: sync_run" — the second one tells you what to do next.
+  if (error instanceof D1Error && error.stderr) {
+    process.stderr.write(`\nwrangler output:\n${error.stderr}\n`);
+  }
   if (error instanceof Error && error.stack) process.stderr.write(`${error.stack}\n`);
   process.exit(2);
 }
