@@ -67,6 +67,7 @@ export class SyncRun {
   #sourceDate: string | null = null;
   #closed = false;
   #detachSignals: (() => void) | null = null;
+  #dryRun = false;
 
   private constructor(id: number, kind: RunKind, startedAt: string, d1: D1, log: Logger) {
     this.id = id;
@@ -76,8 +77,33 @@ export class SyncRun {
     this.#log = log.child(`run#${id}`);
   }
 
-  static async open(kind: RunKind, d1: D1, log: Logger): Promise<SyncRun> {
+  /**
+   * Sentinel id for a dry run. Negative so it can never collide with an AUTOINCREMENT id, and
+   * so a stray `last_seen_run_id = -1` in any future write would be obvious rather than
+   * plausible.
+   */
+  static readonly DRY_RUN_ID = -1;
+
+  /**
+   * `dryRun` skips the INSERT entirely.
+   *
+   * This used to open a real row regardless, which broke the flag's only promise: a dry run is
+   * what an operator uses to check credentials and connectivity BEFORE touching production, so
+   * it must not be the thing that writes to production. Three rows — including one orphaned
+   * `running` row from a killed process — landed in the live sync_run table from runs that
+   * reported writing nothing.
+   */
+  static async open(kind: RunKind, d1: D1, log: Logger, dryRun = false): Promise<SyncRun> {
     const startedAt = new Date().toISOString();
+
+    if (dryRun) {
+      const run = new SyncRun(SyncRun.DRY_RUN_ID, kind, startedAt, d1, log);
+      run.#dryRun = true;
+      run.#installSignalHandlers();
+      log.info('sync run opened (dry run — nothing will be written)', { kind, startedAt });
+      return run;
+    }
+
     const row = await d1.queryOne<{ id: number }>(
       `INSERT INTO sync_run (kind, status, started_at) VALUES (${sqlString(kind)}, ${sqlString(RunStatus.Running)}, ${sqlString(startedAt)}) RETURNING id;`,
       'open-run',
@@ -159,6 +185,13 @@ export class SyncRun {
     this.#closed = true;
     this.#detachSignals?.();
 
+    // No row was inserted, so there is nothing to UPDATE. Still log the outcome: the operator
+    // running a dry run wants the same counters and the same verdict, just no side effects.
+    if (this.#dryRun) {
+      this.#log.info('sync run closed (dry run — nothing written)', { status, ...this.counters });
+      return;
+    }
+
     const sql = [
       'UPDATE sync_run SET',
       `  status = ${sqlString(status)},`,
@@ -191,6 +224,12 @@ export class SyncRun {
    * is fit to serve" stay distinguishable in the data.
    */
   async publish(): Promise<void> {
+    if (this.#dryRun) {
+      this.#log.info('would publish (dry run — app_meta unchanged)', {
+        sourceDate: this.#sourceDate,
+      });
+      return;
+    }
     await this.#d1.command(
       `UPDATE app_meta SET published_run_id = ${sqlInt(this.id)}, published_at = ${sqlString(new Date().toISOString())}, source_date = ${sqlValue(this.#sourceDate)} WHERE id = 1;`,
       'publish',

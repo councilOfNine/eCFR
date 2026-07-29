@@ -1085,7 +1085,7 @@ export async function runBackfill(ctx: PipelineContext): Promise<boolean> {
   // gate compares against; reading it any later compares the run to itself.
   const baseline = await readGateBaseline(ctx.d1, ctx.log);
 
-  const run = await SyncRun.open(RunKind.Backfill, ctx.d1, ctx.log);
+  const run = await SyncRun.open(RunKind.Backfill, ctx.d1, ctx.log, ctx.config.dryRun);
   ctx.staging = new ContentStaging(ctx.config.snapshotDir, run.id);
   const apply = new ApplyQueue();
   const pruner = new SqlWriter({ outDir: join(ctx.config.outDir, 'prune'), runId: run.id });
@@ -1207,7 +1207,7 @@ export async function runBackfill(ctx: PipelineContext): Promise<boolean> {
 export async function runDelta(ctx: PipelineContext): Promise<boolean> {
   const baseline = await readGateBaseline(ctx.d1, ctx.log);
 
-  const run = await SyncRun.open(RunKind.Delta, ctx.d1, ctx.log);
+  const run = await SyncRun.open(RunKind.Delta, ctx.d1, ctx.log, ctx.config.dryRun);
   ctx.staging = new ContentStaging(ctx.config.snapshotDir, run.id);
   const apply = new ApplyQueue();
   const pruner = new SqlWriter({ outDir: join(ctx.config.outDir, 'prune'), runId: run.id });
