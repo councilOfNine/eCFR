@@ -115,9 +115,35 @@ export function parseRate(raw: string | undefined, fallback: number): number {
   return value;
 }
 
+/**
+ * Flags the pipeline entry points understand.
+ *
+ * An unrecognised flag USED to be ignored in silence, which is worse than it sounds here:
+ * `--titles 1,3` (a build-fixtures flag, not a sync one) looked like it had scoped the run to
+ * two small titles and instead started a full 49-title, 810 MB pull against eCFR. A typo in
+ * `--dry-run` would be the same mistake with production consequences, so an unknown flag is
+ * now fatal.
+ */
+const KNOWN_FLAGS: ReadonlySet<string> = new Set([
+  '--remote',
+  '--dry-run',
+  '--fresh',
+  '--cold-cache',
+]);
+
 export function loadConfig(argv: readonly string[] = process.argv.slice(2)): SyncConfig {
   const repoRoot = findRepoRoot();
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
+
+  // Compare on the bare flag so `--flag=value` is judged by its name, not its value.
+  const unknown = [...flags].map((f) => f.split('=')[0] ?? f).filter((f) => !KNOWN_FLAGS.has(f));
+  if (unknown.length > 0) {
+    throw new Error(
+      `unknown flag(s): ${unknown.join(', ')}\n` +
+        `known flags: ${[...KNOWN_FLAGS].join(', ')}\n` +
+        'Refusing to run: an ignored flag can silently mean a much larger job than intended.',
+    );
+  }
 
   // Default to --local so a contributor who clones the repo and runs the pipeline cannot
   // accidentally write to production D1 by omitting a flag.
