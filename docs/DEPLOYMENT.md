@@ -117,11 +117,14 @@ Settings → Secrets and variables → Actions.
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Dashboard sidebar |
 | `R2_ACCESS_KEY_ID` | secret | From the R2 API token in 0.2 |
 | `R2_SECRET_ACCESS_KEY` | secret | From the R2 API token in 0.2 |
-| `R2_ACCOUNT_ID` | secret | Same value as `CLOUDFLARE_ACCOUNT_ID`; the pipeline reads it under its own name |
-| `HEALTHCHECK_SYNC_URL` | secret | Phase 3 |
-| `HEALTHCHECK_EXPORT_URL` | secret | Phase 5 |
-| `API_ORIGIN` | variable | `https://ecfr.fixit.works` |
-| `R2_TEXT_BUCKET` | variable | `ecfr-atlas-content` |
+| `HEALTHCHECK_SYNC_URL` | secret | Optional. Without it the nightly runs unmonitored and says so in the run summary. |
+| `HEALTHCHECK_EXPORT_URL` | secret | Optional, Phase 5. |
+| `API_ORIGIN` | variable | `https://ecfr.fixit.works` — enables deploy.yml's post-deploy smoke test |
+| `R2_CONTENT_BUCKET` | variable | Optional; defaults to `ecfr-atlas-content` in the workflows |
+
+No `R2_ACCOUNT_ID` secret: the workflows derive it from `CLOUDFLARE_ACCOUNT_ID`
+(sync.yml maps one onto the other). It is only a distinct name in a LOCAL shell, where the
+pipeline reads the four `R2_*` variables directly.
 
 ---
 
