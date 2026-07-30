@@ -93,6 +93,12 @@ export class CheckpointStore {
     if (!checkpoint) return null;
     if (checkpoint.sourceDate !== sourceDate) return null;
     if (checkpoint.structureFingerprint !== structureFingerprint) return null;
+    // A checkpoint that recorded failures is a record of an ATTEMPT, not of completion.
+    // Honouring it would requeue SQL whose nodes are marked unavailable, so a retry after a
+    // partial failure could never heal — title 40's 25,983 parse failures would have been
+    // resubmitted verbatim on every rerun, and the publish gate would have refused forever
+    // until someone discovered --fresh.
+    if (checkpoint.fetchFailures > 0 || checkpoint.parseFailures > 0) return null;
     return checkpoint;
   }
 

@@ -105,10 +105,14 @@ const XML_PARSER = new XMLParser({
 /**
  * Ceiling on a single `parseXml` call.
  *
- * 128 MiB accommodates every title except 40 (156,946,999 B) and keeps a runaway input from
- * taking the sync process down with an OOM instead of a diagnosable error.
+ * 192 MiB. The previous 128 MiB was known not to fit title 40 (156,946,999 B = 149.7 MiB, the
+ * largest payload in the corpus) and the backfill never overrode it, so the first full run
+ * marked all 25,983 of title 40's nodes `unavailable_parse_failed` and the publish gate
+ * refused the corpus. The ceiling exists to turn a runaway input into a diagnosable error
+ * instead of an OOM — 192 MiB keeps that property (the next-largest title is 87 MB) while
+ * admitting every real title with ~28% headroom.
  */
-export const DEFAULT_MAX_PARSE_BYTES = 128 * 1024 * 1024;
+export const DEFAULT_MAX_PARSE_BYTES = 192 * 1024 * 1024;
 
 export interface ParseOptions {
   maxBytes?: number;

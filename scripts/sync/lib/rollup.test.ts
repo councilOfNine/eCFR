@@ -271,6 +271,7 @@ describe('intra-agency nesting (defect 4: an ancestor and its descendant both co
       narrowestLevel: 'part',
       nodeCitation: null,
       measurement: counted(1),
+      dangling: false,
     });
     const claims = [
       claim('title-42/chapter-I', { title: 42, chapter: 'I' }),
@@ -312,16 +313,21 @@ describe('unknowns propagate instead of shrinking the total', () => {
     expect(result.rollups[0]?.coveragePct).toBe(0.5);
   });
 
-  it('nulls the total when a reference names a scope that does not exist', () => {
+  it('a reference naming a scope that does not exist is dangling, not unknown', () => {
+    // SEMANTICS CHANGED with the dangling partition. This used to assert NULL, and that
+    // strictness let two stale rows in eCFR's agencies.json veto the corpus total forever.
+    // Absent-from-structure now measures as zero footprint with visible coverage; the
+    // NULL-propagation discipline lives on in the failed-measurement test below.
     const { nodes, measurements } = buildFixture();
     const resolver = createScopeResolver(nodes, measurements);
     const result = computeRollups({
       agencies: [agency('ghost', [{ title: 42, chapter: 'XCIX' }])],
       resolver,
     });
-    expect(result.rollups[0]?.attributedWordCount).toBeNull();
+    expect(result.rollups[0]?.attributedWordCount).toBe(0);
     expect(result.rollups[0]?.coveragePct).toBe(0);
     expect(result.unresolvedScopes).toBe(1);
+    expect(result.danglingScopes).toEqual(['title-42/chapter-XCIX']);
   });
 
   it('refuses to guess when a scope matches more than one node', () => {
@@ -401,5 +407,103 @@ describe('agencies with no references', () => {
     expect(result.rollups[0]?.attributedWordCount).toBe(0);
     expect(result.rollups[0]?.refsTotal).toBe(0);
     expect(result.rollups[0]?.coveragePct).toBe(1);
+  });
+});
+
+describe('dangling upstream references (defect 5: two stale rows vetoing the corpus)', () => {
+  // eCFR's agencies.json has referenced 15 CFR XXIII and 15 CFR XIII for years; its own
+  // structure contains neither. The predecessor invented numbers for them. The first strict
+  // implementation here fed their unavailable() into the corpus rollUp, which made the
+  // headline NULL forever — a permanently unpublishable dashboard over upstream metadata rot.
+
+  it('a dangling scope does not null the corpus or the claiming agency', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('healthy', [{ title: 42, chapter: 'I' }]),
+        // Chapter IX does not exist in the fixture structure — the 15 CFR XXIII shape.
+        agency('stale-ref', [
+          { title: 42, chapter: 'IX' },
+          { title: 42, chapter: 'II' },
+        ]),
+      ],
+      resolver,
+    });
+
+    expect(result.corpusDeduplicatedWords).toBe(1000);
+    expect(result.danglingScopes).toEqual(['title-42/chapter-IX']);
+    expect(result.unresolvedScopes).toBe(1);
+
+    const stale = result.rollups.find((r) => r.agencySlug === 'stale-ref');
+    // The existing chapter II still counts; the dangling ref is visible in coverage.
+    expect(stale?.attributedWordCount).toBe(400);
+    expect(stale?.refsTotal).toBe(2);
+    expect(stale?.refsCounted).toBe(1);
+    // The declared reference row survives so the agency page can show the stale claim.
+    expect(
+      result.references.some(
+        (r) => r.agencySlug === 'stale-ref' && r.refKey === 'title-42/chapter-IX',
+      ),
+    ).toBe(true);
+  });
+
+  it('an agency whose every reference is dangling measures 0, not unknown', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      // The East-West Foreign Trade Board shape: one reference, absent from the structure.
+      agencies: [agency('defunct', [{ title: 42, chapter: 'XIII' }])],
+      resolver,
+    });
+
+    const row = result.rollups[0];
+    // Its current CFR footprint is genuinely zero — known-absent, not unknown.
+    expect(row?.attributedWordCount).toBe(0);
+    expect(row?.deduplicatedWordCount).toBe(0);
+    expect(row?.refsTotal).toBe(1);
+    expect(row?.refsCounted).toBe(0);
+    // With EVERY declared scope dangling there is nothing summable at all, and a corpus of
+    // "0 words" over an empty universe would read as a catastrophic miscount. Null-with-reason
+    // is the honest shape here; production always has hundreds of summable scopes.
+    expect(result.corpusDeduplicatedWords).toBeNull();
+  });
+
+  it('an EXISTING scope with a failed measurement still nulls everything it touches', () => {
+    // The strictness the exclusion must not erode: title-40's parse failure has to keep
+    // blocking the gate. Remove a measurement so chapter II exists but is unknown.
+    const { nodes, measurements } = buildFixture();
+    measurements.delete('title-42/chapter-II');
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [agency('unlucky', [{ title: 42, chapter: 'II' }])],
+      resolver,
+    });
+
+    expect(result.rollups[0]?.attributedWordCount).toBeNull();
+    expect(result.corpusDeduplicatedWords).toBeNull();
+    expect(result.danglingScopes).toEqual([]);
+  });
+
+  it('conservation still holds with a dangling scope in the declared set', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('a', [
+          { title: 42, chapter: 'I' },
+          { title: 42, chapter: 'XIII' },
+        ]),
+        agency('b', [
+          { title: 42, chapter: 'I' },
+          { title: 42, chapter: 'II' },
+        ]),
+      ],
+      resolver,
+    });
+
+    const sum = result.rollups.reduce((acc, r) => acc + (r.deduplicatedWordCount ?? 0), 0);
+    expect(result.corpusDeduplicatedWords).toBe(sum);
+    expect(result.corpusDeduplicatedWords).toBe(1000);
   });
 });
