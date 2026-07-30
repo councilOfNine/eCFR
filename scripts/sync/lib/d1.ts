@@ -89,10 +89,12 @@ export class D1 {
   #config: SyncConfig;
   #log: Logger;
   #binary: string;
+  #backoffMs: readonly number[];
 
-  constructor(config: SyncConfig, log: Logger) {
+  constructor(config: SyncConfig, log: Logger, backoffMs: readonly number[] = [2_000, 8_000]) {
     this.#config = config;
     this.#log = log.child('d1');
+    this.#backoffMs = backoffMs;
 
     // Prefer the workspace-pinned wrangler over whatever is on PATH; a version skew between
     // the CLI applying migrations and the one deploying the Worker is a real source of
@@ -150,6 +152,41 @@ export class D1 {
     }
   }
 
+  /**
+   * Retry wrapper for invocations that are safe to re-execute.
+   *
+   * Run 7 died at segment 43 of 51: after five minutes of clean applies, one D1 import call
+   * returned `Authentication error [code: 10000]` — transient, upstream — and the run
+   * forfeited its publish because nothing here retried. Segment files are idempotent by
+   * construction (upserts keyed on citation/slug; the resume path re-applies whole files),
+   * and queries are reads, so both retry. `command()` does not: it carries the one
+   * non-idempotent statement in the pipeline (the sync_run INSERT), where a retry after an
+   * ambiguous success would record a second run.
+   *
+   * Deterministic failures (missing table, bad SQL) just fail every attempt with the same
+   * message, costing ~10 extra seconds — acceptable against a 90-minute run lost to a blip.
+   */
+  async #runWithRetry(extra: string[], label: string): Promise<string> {
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt <= this.#backoffMs.length; attempt += 1) {
+      try {
+        return await this.#run(extra, label);
+      } catch (error) {
+        lastError = error;
+        const delay = this.#backoffMs[attempt];
+        if (delay !== undefined) {
+          this.#log.warn('wrangler invocation failed; retrying', {
+            label,
+            attempt: attempt + 1,
+            error: error instanceof Error ? error.message.slice(0, 300) : String(error),
+          });
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
   /** Run one or more statements supplied inline. Use for small, code-built SQL only. */
   async command(sql: string, label = 'command'): Promise<void> {
     await this.#run(['--command', sql], label);
@@ -157,7 +194,7 @@ export class D1 {
 
   /** Run a query and return its rows. */
   async query<T>(sql: string, label = 'query'): Promise<T[]> {
-    const stdout = await this.#run(['--command', sql, '--json'], label);
+    const stdout = await this.#runWithRetry(['--command', sql, '--json'], label);
     const parsed = parseWranglerJson<T>(stdout);
     const rows: T[] = [];
     for (const result of parsed) {
@@ -177,7 +214,7 @@ export class D1 {
 
   /** Apply a generated .sql segment. */
   async applyFile(path: string): Promise<void> {
-    await this.#run(['--file', path], `file:${path}`);
+    await this.#runWithRetry(['--file', path], `file:${path}`);
   }
 
   /** Apply segments in order, stopping at the first failure. */

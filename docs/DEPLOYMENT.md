@@ -156,12 +156,14 @@ contributor cannot write to production by forgetting a flag — and the local mi
 has no schema unless you have run `pnpm db:reset`. Omitting the flag fails with
 "no such table: sync_run".
 
-**If a run dies mid-way** — crash, network drop, Ctrl-C — rerun **without** `--fresh`: completed
-titles are skipped via their checkpoints and their staged output is requeued, so only the
-interrupted title and the remainder are reprocessed. `--fresh` is for exactly two situations: the
-publish gate **refused** the previous run (refusal discards staged content, so resuming from
-checkpoints would assemble a snapshot with no body text), or parser/measurement code changed and
-the checkpoints no longer describe what the code would produce.
+**If a run dies mid-way** — crash, network drop, Ctrl-C, or a mid-apply failure ("segments were
+only partly applied") — rerun **without** `--fresh`: completed titles are skipped via their
+checkpoints, their staged SQL is requeued, and their staged HTML survives to be promoted by the
+resume. D1 applies retry transient wrangler failures on their own (run 7 forfeited a 95-minute
+run to a single upstream `Authentication error [code: 10000]` that the retry now absorbs).
+`--fresh` remains for exactly two situations: the publish gate **refused** the previous run — a
+judgement against the data itself, so its staged content is discarded — or parser/measurement
+code changed and the checkpoints no longer describe what the code would produce.
 
 On macOS the entries hold a `caffeinate` sleep assertion while they run. That is not decoration:
 run 5 froze under Deep Idle sleep mid-title-40, and the first R2 `PUT` transmitted after a freeze

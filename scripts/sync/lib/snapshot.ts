@@ -222,15 +222,22 @@ function sumOrUnknown(values: readonly (number | null)[], noun: string): WordCou
  * text is part of that snapshot. Writing straight into `content/` would mean a refused run
  * still replaced the text a later accepted run would then point at — text that was never
  * gate-checked, sitting under measurements from a different run.
+ *
+ * ONE staging directory, deliberately not scoped per run. The cache has a single owner
+ * (concurrent runs against one .sync-cache are unsupported everywhere else too), and run-id
+ * scoping turned out to be a trap: HTML staged by an interrupted run was invisible to the
+ * resume that requeued its SQL, forcing a full 810 MB re-pull over an infrastructure blip.
+ * Staging survives crashes and partial applies — staged HTML and staged SQL requeue
+ * together — and is discarded only when the gate REFUSES the data it belongs to.
  */
 export class ContentStaging {
   readonly stagingDir: string;
   readonly contentDir: string;
   #staged = 0;
 
-  constructor(snapshotDir: string, runId: number) {
+  constructor(snapshotDir: string) {
     this.contentDir = join(snapshotDir, 'content');
-    this.stagingDir = join(snapshotDir, `.staging-run-${runId}`);
+    this.stagingDir = join(snapshotDir, '.staging');
   }
 
   get staged(): number {
@@ -295,13 +302,13 @@ export class ContentStaging {
 export interface AmendmentIndex {
   total: number;
   latestIssueDate: string | null;
-  /** `${title} ${part ?? ''}` -> `YYYY-MM` -> count, within the charted window. */
+  /** `${title}\0${part ?? ''}` -> `YYYY-MM` -> count, within the charted window. */
   monthly: Map<string, Map<string, number>>;
-  /** `${title} ${part}` -> most recent amendment_date. */
+  /** `${title}\0${part}` -> most recent amendment_date. */
   lastAmended: Map<string, string>;
 }
 
-const partKey = (title: number, part: string | null): string => `${title} ${part ?? ''}`;
+const partKey = (title: number, part: string | null): string => `${title}\0${part ?? ''}`;
 
 /** First month of the charted window, `YYYY-MM`, derived from the newest issue_date present. */
 function windowStart(latestIssueDate: string | null): string | null {

@@ -930,7 +930,10 @@ async function finalise(input: FinaliseInput): Promise<boolean> {
     log.error(PARTIAL_APPLY_REFUSAL, {
       partialTitles: run.partiallyWrittenTitles.join(',') || 'none',
     });
-    await ctx.staging?.discard();
+    // Staging is NOT discarded here. The gate accepted this data; what failed is
+    // infrastructure (run 7: one transient auth error from the D1 import API after 42 clean
+    // segments). The staged HTML belongs to exactly the SQL a resume will requeue, so
+    // keeping it is what lets that resume publish without re-pulling 810 MB.
     return false;
   }
 
@@ -960,7 +963,7 @@ async function finalise(input: FinaliseInput): Promise<boolean> {
     log.info('promoted rendered content into the snapshot', { files: promoted });
   }
 
-  const staging = ctx.staging ?? new ContentStaging(ctx.config.snapshotDir, run.id);
+  const staging = ctx.staging ?? new ContentStaging(ctx.config.snapshotDir);
   await writeSnapshot({
     dir: ctx.config.snapshotDir,
     runId: run.id,
@@ -1086,7 +1089,7 @@ export async function runBackfill(ctx: PipelineContext): Promise<boolean> {
   const baseline = await readGateBaseline(ctx.d1, ctx.log);
 
   const run = await SyncRun.open(RunKind.Backfill, ctx.d1, ctx.log, ctx.config.dryRun);
-  ctx.staging = new ContentStaging(ctx.config.snapshotDir, run.id);
+  ctx.staging = new ContentStaging(ctx.config.snapshotDir);
   const apply = new ApplyQueue();
   const pruner = new SqlWriter({ outDir: join(ctx.config.outDir, 'prune'), runId: run.id });
   await mkdir(join(ctx.config.outDir, 'prune'), { recursive: true });
@@ -1197,7 +1200,9 @@ export async function runBackfill(ctx: PipelineContext): Promise<boolean> {
     await run.succeed(ok ? RUN_PUBLISHED : RUN_REFUSED_BY_GATE);
     return ok;
   } catch (error) {
-    await ctx.staging?.discard();
+    // Staging survives a crash on purpose: the resume requeues this run's staged SQL and
+    // must be able to promote the HTML rendered alongside it. Only a gate refusal — a
+    // judgement against the data itself — discards staged content.
     if (error instanceof ImportInProgressError) await run.abort(error.message);
     else await run.fail(error);
     throw error;
@@ -1208,7 +1213,7 @@ export async function runDelta(ctx: PipelineContext): Promise<boolean> {
   const baseline = await readGateBaseline(ctx.d1, ctx.log);
 
   const run = await SyncRun.open(RunKind.Delta, ctx.d1, ctx.log, ctx.config.dryRun);
-  ctx.staging = new ContentStaging(ctx.config.snapshotDir, run.id);
+  ctx.staging = new ContentStaging(ctx.config.snapshotDir);
   const apply = new ApplyQueue();
   const pruner = new SqlWriter({ outDir: join(ctx.config.outDir, 'prune'), runId: run.id });
   await mkdir(join(ctx.config.outDir, 'prune'), { recursive: true });
@@ -1348,7 +1353,9 @@ export async function runDelta(ctx: PipelineContext): Promise<boolean> {
     await run.succeed(ok ? RUN_PUBLISHED : RUN_REFUSED_BY_GATE);
     return ok;
   } catch (error) {
-    await ctx.staging?.discard();
+    // Staging survives a crash on purpose: the resume requeues this run's staged SQL and
+    // must be able to promote the HTML rendered alongside it. Only a gate refusal — a
+    // judgement against the data itself — discards staged content.
     if (error instanceof ImportInProgressError) await run.abort(error.message);
     else await run.fail(error);
     throw error;

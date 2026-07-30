@@ -90,8 +90,16 @@ class FakeD1 {
     this.commands.push(sql);
   }
 
+  /** When set, applyFile throws on the first path containing this substring. */
+  failApplyOn: string | null = null;
+
   async applyFile(path: string): Promise<void> {
     this.trace.push('apply');
+    if (this.failApplyOn && path.includes(this.failApplyOn)) {
+      throw new Error(
+        `wrangler d1 execute failed (file:${path}): Authentication error [code: 10000]`,
+      );
+    }
     this.applied.push(path);
   }
 
@@ -276,8 +284,24 @@ describe('a run the publish gate refuses', () => {
     expect(existsSync(join(workDir, 'snapshot', 'manifest.json'))).toBe(false);
 
     // And no staged HTML left behind to be picked up by a later run that never rendered it.
-    const staged = join(workDir, 'snapshot', '.staging-run-7');
+    const staged = join(workDir, 'snapshot', '.staging');
     expect(existsSync(staged)).toBe(false);
+  });
+
+  it('a mid-apply failure refuses the publish but PRESERVES staged content for the resume', async () => {
+    // Run 7: 42 segments applied cleanly, then one transient auth error from the D1 import
+    // API. The data passed the gate; only infrastructure failed. Discarding staging here
+    // forced a full 810 MB re-pull over a blip — the staged HTML must survive instead,
+    // because the resume requeues exactly the SQL it was rendered alongside.
+    d1.failApplyOn = 'title-1';
+
+    const published = await runBackfill(ctx);
+    expect(published).toBe(false);
+
+    // The pointer did not move, and the snapshot was not promoted…
+    expect(d1.commands.some((sql) => sql.includes('published_run_id ='))).toBe(false);
+    // …but the staged HTML is still there for the next run to promote.
+    expect(existsSync(join(workDir, 'snapshot', '.staging'))).toBe(true);
   });
 
   it('reads the gate baseline before it writes anything, so `previous` is the PUBLISHED run', async () => {
@@ -363,7 +387,7 @@ describe('a run the publish gate accepts', () => {
     ).toBe(true);
 
     // The staging directory is emptied once its contents are promoted.
-    expect(existsSync(join(workDir, 'snapshot', '.staging-run-7'))).toBe(false);
+    expect(existsSync(join(workDir, 'snapshot', '.staging'))).toBe(false);
   });
 
   it('writes the full amendment history a backfill fetched', async () => {
