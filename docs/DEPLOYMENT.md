@@ -147,9 +147,14 @@ export CLOUDFLARE_API_TOKEN=...  CLOUDFLARE_ACCOUNT_ID=...
 export R2_ACCOUNT_ID=...         R2_BUCKET=ecfr-atlas-content
 export R2_ACCESS_KEY_ID=...      R2_SECRET_ACCESS_KEY=...
 
-pnpm sync:backfill --dry-run     # fetch, parse, validate; write nothing
-pnpm sync:backfill               # for real
+pnpm sync:backfill --remote --dry-run   # fetch, parse, validate; write nothing
+pnpm sync:backfill --remote             # for real
 ```
+
+`--remote` is not optional here. The pipeline defaults to `--local` — a deliberate guard so a
+contributor cannot write to production by forgetting a flag — and the local miniflare database
+has no schema unless you have run `pnpm db:reset`. Omitting the flag fails with
+"no such table: sync_run".
 
 The dry run is worth the time on a first attempt: it exercises the fetch, the parser and the
 publish gate without touching D1, so a credential or schema problem surfaces before an hour of
