@@ -12,7 +12,7 @@
  * under tsconfig.tests.json.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import type { KnownStatus, Measurement, UnknownStatus } from '@ecfr-atlas/core';
 import {
   assertNever,
@@ -123,23 +123,35 @@ describe('assertNever', () => {
  * this fail on a harmless reformat of the migration.
  */
 describe('the migration CHECK constraints still spell these vocabularies the same way', () => {
-  const migration = readFileSync(
-    new URL('../../db/migrations/0001_init.sql', import.meta.url),
-    'utf8',
-  );
+  // A rebuild migration supersedes the original table (0003 recreated structure_node to
+  // widen its CHECKs — SQLite cannot ALTER one), so the operative spelling of a constraint
+  // is whatever the LATEST migration that mentions it says. Earlier files are history and
+  // deliberately left uncompared.
+  const migrations = readdirSync(new URL('../../db/migrations/', import.meta.url))
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => readFileSync(new URL(`../../db/migrations/${f}`, import.meta.url), 'utf8'));
+
+  function operativeText(anchor: string): string {
+    const holding = migrations.filter((text) => text.includes(anchor));
+    expect(holding.length, `no migration contains \`${anchor}\``).toBeGreaterThan(0);
+    return holding[holding.length - 1] as string;
+  }
 
   /**
-   * The quoted literals of the first `<column> IN ( ... )` list in the migration.
+   * The quoted literals of the first `<column> IN ( ... )` list in the operative migration.
    *
-   * Anchored on `<column> IN` rather than on the bare column name, which would find the column
-   * DEFINITION line instead and read a list that is not there.
+   * Anchored on `<column> IN` rather than on the bare column name, which would find the
+   * column DEFINITION line instead and read a list that is not there. First occurrence within
+   * the file, because the NULL/status partition constraint repeats `word_count_status IN`
+   * further down with the unknown-only subset.
    */
   function checkedValues(column: string): string[] {
-    const start = migration.indexOf(`${column} IN`);
-    expect(start, `no \`${column} IN (...)\` constraint in 0001_init.sql`).toBeGreaterThan(-1);
-    const open = migration.indexOf('(', start);
-    const close = migration.indexOf(')', open);
-    return [...migration.slice(open, close).matchAll(/'([^']*)'/g)].map((m) => m[1] as string);
+    const text = operativeText(`${column} IN`);
+    const start = text.indexOf(`${column} IN`);
+    const open = text.indexOf('(', start);
+    const close = text.indexOf(')', open);
+    return [...text.slice(open, close).matchAll(/'([^']*)'/g)].map((m) => m[1] as string);
   }
 
   it.each([
@@ -160,13 +172,11 @@ describe('the migration CHECK constraints still spell these vocabularies the sam
     // The load-bearing constraint: `(word_count IS NULL) = (word_count_status IN <unknown>)`.
     // If a status moved sides here, a number could be stored for a node nobody measured —
     // which is the single failure this whole codebase is built to make impossible.
-    const anchor = migration.indexOf('(word_count IS NULL) =');
-    expect(anchor, 'the NULL/status partition constraint is gone').toBeGreaterThan(-1);
-    const open = migration.indexOf('IN (', anchor);
-    const close = migration.indexOf(')', open + 'IN ('.length);
-    const listed = [...migration.slice(open, close).matchAll(/'([^']*)'/g)].map(
-      (m) => m[1] as string,
-    );
+    const text = operativeText('(word_count IS NULL) =');
+    const anchor = text.indexOf('(word_count IS NULL) =');
+    const open = text.indexOf('IN (', anchor);
+    const close = text.indexOf(')', open + 'IN ('.length);
+    const listed = [...text.slice(open, close).matchAll(/'([^']*)'/g)].map((m) => m[1] as string);
     expect(new Set(listed)).toEqual(new Set(UNKNOWN_STATUSES));
   });
 });

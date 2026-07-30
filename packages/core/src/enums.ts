@@ -23,10 +23,17 @@
 export const WordCountStatus = {
   /** Measured directly by parsing this node's own XML. */
   Counted: 'counted',
-  /** Summed from descendants, all of which are themselves `counted` or `reserved_empty`. */
+  /** Summed from descendants, all of which are themselves known. */
   RolledUp: 'rolled_up',
   /** The node exists in the CFR structure but is reserved and has no text. Genuinely 0. */
   ReservedEmpty: 'reserved_empty',
+  /**
+   * The structure declares this node's XML subtree as zero bytes: an editorial `hed1`
+   * heading or a note shell whose only content is its own label — and headings are excluded
+   * from word counts by design. Genuinely 0. Distinct from `reserved_empty` because the node
+   * is not flagged reserved; reusing that status would store self-contradicting rows.
+   */
+  StructurallyEmpty: 'structurally_empty',
   /** Previously counted; the source has since changed and the recount has not run yet. */
   Stale: 'stale',
   /** In scope, but no sync run has reached it yet. */
@@ -49,6 +56,7 @@ export const WORD_COUNT_STATUSES = [
   WordCountStatus.Counted,
   WordCountStatus.RolledUp,
   WordCountStatus.ReservedEmpty,
+  WordCountStatus.StructurallyEmpty,
   WordCountStatus.Stale,
   WordCountStatus.NotComputed,
   WordCountStatus.UnavailableFetchFailed,
@@ -61,6 +69,7 @@ export const KNOWN_STATUSES = [
   WordCountStatus.Counted,
   WordCountStatus.RolledUp,
   WordCountStatus.ReservedEmpty,
+  WordCountStatus.StructurallyEmpty,
   WordCountStatus.Stale,
 ] as const satisfies readonly WordCountStatus[];
 
@@ -83,6 +92,8 @@ export const CountMethod = {
   DescendantSum: 'descendant_sum',
   /** The node is reserved; zero by definition, nothing was parsed. */
   Reserved: 'reserved',
+  /** eCFR's structure fingerprint declares zero XML bytes for this subtree; zero words follows. */
+  DeclaredEmpty: 'declared_empty',
 } as const;
 
 export type CountMethod = (typeof CountMethod)[keyof typeof CountMethod];
@@ -92,6 +103,7 @@ export const COUNT_METHODS = [
   CountMethod.XmlParse,
   CountMethod.DescendantSum,
   CountMethod.Reserved,
+  CountMethod.DeclaredEmpty,
 ] as const satisfies readonly CountMethod[];
 
 /**

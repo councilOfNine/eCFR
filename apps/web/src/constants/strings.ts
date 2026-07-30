@@ -179,6 +179,7 @@ export const STRINGS = {
       counted: 'Measured directly',
       rolled_up: 'Summed from measured parts',
       reserved_empty: 'Reserved — genuinely empty',
+      structurally_empty: 'Heading only — no regulatory text',
       stale: 'Measured, awaiting recount',
       not_computed: 'Not yet computed',
       unavailable_fetch_failed: 'Source fetch failed',

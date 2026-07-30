@@ -41,6 +41,7 @@ export function isKnownStatus(status: WordCountStatus): status is KnownStatus {
     case WordCountStatus.Counted:
     case WordCountStatus.RolledUp:
     case WordCountStatus.ReservedEmpty:
+    case WordCountStatus.StructurallyEmpty:
     case WordCountStatus.Stale:
       return true;
     case WordCountStatus.NotComputed:
@@ -78,6 +79,21 @@ export function reservedEmpty(): Measurement {
     words: 0,
     status: WordCountStatus.ReservedEmpty,
     method: CountMethod.Reserved,
+  };
+}
+
+/**
+ * A zero that comes from the structure fingerprint, not from parsing: eCFR declares this
+ * node's XML subtree as zero bytes. 150 such leaves exist (editorial `hed1` headings, one
+ * `[Note]` subtitle shell, one reserved-in-name-only subchapter); their only content is
+ * their label, and headings are excluded from counts by design.
+ */
+export function structurallyEmpty(): Measurement {
+  return {
+    known: true,
+    words: 0,
+    status: WordCountStatus.StructurallyEmpty,
+    method: CountMethod.DeclaredEmpty,
   };
 }
 

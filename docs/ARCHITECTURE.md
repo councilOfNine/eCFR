@@ -91,6 +91,12 @@ parts, plus subpart splits for the 94 parts over 1 MB. Fifty, not forty-nine —
 reserved and still gets its own page, where it renders a genuine zero (`reserved_empty` is a
 _known_ status: the CFR really does have nothing there) rather than being quietly omitted.
 
+`structurally_empty` is its sibling zero. eCFR's structure declares 150 leaves with an
+additive XML size of zero — editorial `hed1` headings, a `[Note]` subtitle shell — whose only
+content is their own label, and headings are excluded from counts by design. They measure 0
+(method `declared_empty`); treating them as `not_computed` would veto every ancestor roll-up
+and permanently block the corpus total over nodes that contain no regulatory text at all.
+
 `@astrojs/cloudflare` splits its output into `dist/client` and `dist/server`, and with every route
 prerendered the latter comes out empty — verified against a real build. `dist/client` is the tree
 that gets uploaded, so it is what `apps/web/wrangler.jsonc` points `assets.directory` at and what

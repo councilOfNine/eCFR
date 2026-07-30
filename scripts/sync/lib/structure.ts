@@ -25,6 +25,7 @@ import {
   childCitation,
   reservedEmpty,
   rollUp,
+  structurallyEmpty,
   unavailable,
   WordCountStatus,
 } from '@ecfr-atlas/core';
@@ -136,7 +137,10 @@ export function flattenStructure(root: StructureNode, titleNumber: number): Flat
  *   2. `rollUp()` of children PLUS the node's own text, if the node has children;
  *   3. the node's own text, for a childless container the XML pass did reach;
  *   4. `reservedEmpty()` for a childless reserved node — genuinely zero, not unknown;
- *   5. otherwise unknown, with a reason naming the citation.
+ *   5. `structurallyEmpty()` for a childless node whose declared XML size is zero — an
+ *      editorial heading whose only content is its own label, which every count excludes
+ *      by design;
+ *   6. otherwise unknown, with a reason naming the citation.
  *
  * WHY OWN TEXT IS AN ADDEND AND NOT AN AFTERTHOUGHT
  *
@@ -158,9 +162,11 @@ export function flattenStructure(root: StructureNode, titleNumber: number): Flat
  * parts whose text simply sits directly under them. Such a part is measured, not guessed: its
  * own text IS its whole subtree, because it has no structure children to exclude.
  *
- * Case 5 exists because eCFR occasionally lists a leaf type the XML pass did not reach (a
+ * Case 6 exists because eCFR occasionally lists a leaf type the XML pass did not reach (a
  * section inside a part whose fetch 504'd). Returning `not_computed` there is what propagates
- * the gap all the way up to the agency total instead of quietly shrinking it.
+ * the gap all the way up to the agency total instead of quietly shrinking it. Case 5 carves
+ * out the one shape that must NOT trigger it: 150 leaves the structure itself declares as
+ * zero bytes, which no fetch could ever fill in.
  *
  * An `ownText` entry that is itself unknown propagates, exactly like an unknown leaf. The
  * pipeline therefore records an entry only when the container was found and measured; a
@@ -207,6 +213,17 @@ export function rollUpTree(
 
     if (node.reserved) {
       resolved.set(node.citation, reservedEmpty());
+      continue;
+    }
+
+    // eCFR's structure fingerprint declares this subtree as zero bytes. 150 such leaves
+    // exist (editorial hed1 headings, a "[Note]" subtitle shell, one reserved-in-name-only
+    // subchapter); their only content is the label, which heading exclusion already keeps
+    // out of every count. Zero declared bytes -> zero words is arithmetic on upstream's own
+    // measurement, not an estimate. The guard is exact: a leaf with a positive or undeclared
+    // size and no measured XML still falls through and keeps blocking the publish gate.
+    if (node.xmlBytes === 0) {
+      resolved.set(node.citation, structurallyEmpty());
       continue;
     }
 

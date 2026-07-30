@@ -346,3 +346,101 @@ describe('helpers', () => {
     expect(indexByCitation(nodes).get('title-1/part-1')?.label).toBe('P');
   });
 });
+
+describe('rollUpTree structurally empty leaves', () => {
+  it('measures a zero-byte leaf as structurally_empty instead of vetoing every ancestor', () => {
+    // Real shape: 18 CFR 101's uniform-system-of-accounts headings are hed1 nodes with no
+    // identifier and a declared size of zero. As not_computed they nulled the corpus total.
+    const nodes = flattenStructure(
+      {
+        type: 'title',
+        identifier: '18',
+        label: 'Title 18',
+        size: 150,
+        children: [
+          {
+            type: 'part',
+            identifier: '101',
+            label: 'Part 101',
+            size: 150,
+            children: [
+              { type: 'hed1', label: 'Income Accounts', size: 0 },
+              { type: 'section', identifier: '101.1', label: '§ 101.1', size: 150 },
+            ],
+          },
+        ],
+      },
+      18,
+    );
+    const hed1 = nodes.find((n) => n.nodeType === 'hed1');
+    expect(hed1).toBeDefined();
+    const leaves = new Map([['title-18/part-101/section-101.1', counted(150)]]);
+
+    const resolved = rollUpTree(nodes, leaves);
+
+    expect(resolved.get(hed1?.citation ?? '')).toMatchObject({
+      known: true,
+      words: 0,
+      status: 'structurally_empty',
+      method: 'declared_empty',
+    });
+    expect(resolved.get('title-18/part-101')).toMatchObject({ known: true, words: 150 });
+    expect(resolved.get('title-18')).toMatchObject({ known: true, words: 150 });
+  });
+
+  it('a positive-size leaf with no measured XML still propagates unknown', () => {
+    const nodes = flattenStructure(
+      {
+        type: 'title',
+        identifier: '1',
+        label: 'T',
+        size: 90,
+        children: [{ type: 'section', identifier: '1.1', label: 'S', size: 90 }],
+      },
+      1,
+    );
+    const resolved = rollUpTree(nodes, new Map());
+    expect(resolved.get('title-1/section-1.1')).toMatchObject({
+      known: false,
+      status: 'not_computed',
+    });
+    expect(resolved.get('title-1')).toMatchObject({ known: false });
+  });
+
+  it('an undeclared size is not a declared zero', () => {
+    const nodes = flattenStructure(
+      {
+        type: 'title',
+        identifier: '1',
+        label: 'T',
+        children: [{ type: 'hed1', label: 'Heading' }],
+      },
+      1,
+    );
+    const hed1 = nodes.find((n) => n.nodeType === 'hed1');
+    const resolved = rollUpTree(nodes, new Map());
+    expect(resolved.get(hed1?.citation ?? '')).toMatchObject({
+      known: false,
+      status: 'not_computed',
+    });
+  });
+
+  it('the reserved flag wins over the size fingerprint', () => {
+    const nodes = flattenStructure(
+      {
+        type: 'title',
+        identifier: '1',
+        label: 'T',
+        size: 0,
+        children: [{ type: 'part', identifier: '9', label: 'P', reserved: true, size: 0 }],
+      },
+      1,
+    );
+    const resolved = rollUpTree(nodes, new Map());
+    expect(resolved.get('title-1/part-9')).toMatchObject({
+      known: true,
+      words: 0,
+      status: 'reserved_empty',
+    });
+  });
+});

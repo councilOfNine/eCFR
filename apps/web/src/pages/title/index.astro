@@ -8,7 +8,8 @@ import { formatDate, formatInt } from '../../data/format';
  *
  * Title 35 is reserved and has three null date fields; it renders as reserved with a genuine
  * zero, because `reserved_empty` is a KNOWN status — the CFR really does have nothing there.
- * That is the one and only case on this site where 0 is the honest answer.
+ * It is the only TITLE whose honest count is 0; the other honest zeros are the reserved and
+ * structurally-empty leaves further down the tree.
  */
 import { atlas } from '../../data/load';
 import * as route from '../../data/routes';
