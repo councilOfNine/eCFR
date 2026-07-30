@@ -29,6 +29,7 @@ const { createLogger } = await import('./lib/log.js');
 const { createContext, runBackfill, clearCache } = await import('./lib/pipeline.js');
 const { ImportInProgressError } = await import('./lib/delta.js');
 const { D1Error } = await import('./lib/d1.js');
+const { keepAwakeWhileRunning } = await import('./lib/keepawake.js');
 
 const config = loadConfig();
 const log = createLogger('backfill');
@@ -40,6 +41,8 @@ log.info('configuration', {
   r2: config.r2 ? config.r2.bucket : 'none (dry render)',
   dryRun: config.dryRun,
 });
+
+keepAwakeWhileRunning(log);
 
 if (process.argv.includes('--fresh')) await clearCache(config, log);
 

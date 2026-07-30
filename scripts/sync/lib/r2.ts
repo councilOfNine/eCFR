@@ -118,15 +118,20 @@ export class R2Client implements ObjectSink {
   /** Returns the byte length written, so callers can record a measured size. */
   async put(key: string, body: Buffer | string, contentType: string): Promise<number> {
     const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
-    const { url, headers } = sign(this.#config, 'PUT', key, payload, {
-      'content-type': contentType,
-      'content-length': String(payload.byteLength),
-    });
 
     // Three attempts. R2 PUTs fail transiently under load and the alternative to retrying is
     // failing a five-minute corpus render on one 500.
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
+      // Signed per attempt, never once outside the loop. SigV4 embeds the wall clock and R2
+      // rejects any request whose x-amz-date is more than 15 minutes stale
+      // (403 RequestTimeTooSkewed) — reachable in practice when the machine sleeps with a PUT
+      // in flight. A signature computed before the loop turns that recoverable 403 into three
+      // resends of the same expired timestamp.
+      const { url, headers } = sign(this.#config, 'PUT', key, payload, {
+        'content-type': contentType,
+        'content-length': String(payload.byteLength),
+      });
       try {
         const response = await fetch(url, { method: 'PUT', headers, body: payload });
         if (response.ok) {

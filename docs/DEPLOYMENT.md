@@ -156,6 +156,17 @@ contributor cannot write to production by forgetting a flag — and the local mi
 has no schema unless you have run `pnpm db:reset`. Omitting the flag fails with
 "no such table: sync_run".
 
+**If a run dies mid-way** — crash, network drop, Ctrl-C — rerun **without** `--fresh`: completed
+titles are skipped via their checkpoints and their staged output is requeued, so only the
+interrupted title and the remainder are reprocessed. `--fresh` is for exactly two situations: the
+publish gate **refused** the previous run (refusal discards staged content, so resuming from
+checkpoints would assemble a snapshot with no body text), or parser/measurement code changed and
+the checkpoints no longer describe what the code would produce.
+
+On macOS the entries hold a `caffeinate` sleep assertion while they run. That is not decoration:
+run 5 froze under Deep Idle sleep mid-title-40, and the first R2 `PUT` transmitted after a freeze
+carried a signature old enough for R2 to reject it (`403 RequestTimeTooSkewed`).
+
 The dry run is worth the time on a first attempt: it exercises the fetch, the parser and the
 publish gate without touching D1, so a credential or schema problem surfaces before an hour of
 downloading. Watch the log for `no R2 credentials` — that line means body text will be measured
