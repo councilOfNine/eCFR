@@ -92,6 +92,38 @@ export async function processTitleXml(
     return { ...result, parseFailures: input.leaves.length };
   }
 
+  // Part-scoped XML lookup. A bare identifier search from the title root is the bug that
+  // shipped part 2's text inside part 431's slice pages: every part has a subpart A, and
+  // findNode returns the first one in document order. Part identifiers are unique within a
+  // title, so the part is located once globally and everything beneath it is searched inside
+  // that subtree only. Section and appendix identifiers embed their part number and are
+  // globally unique anyway — which is why the MEASUREMENTS were right all along while the
+  // rendered slices were wrong. A citation with no part segment falls back to the global
+  // search; a part the XML lacks leaves the target unresolved so absence keeps being
+  // reported per-leaf, never satisfied by a same-named node in someone else's part.
+  const partNodes = new Map<string, ReturnType<EcfrModule['parser']['findNode']>>();
+  const scopedFind = (
+    citation: string,
+    target: Parameters<EcfrModule['parser']['findNode']>[1],
+  ): ReturnType<EcfrModule['parser']['findNode']> => {
+    let partIdentifier: string | null = null;
+    for (const segment of citation.split('/')) {
+      if (segment.startsWith('part-')) {
+        partIdentifier = segment.slice('part-'.length);
+        break;
+      }
+    }
+    if (partIdentifier === null || target.type === 'part') {
+      return ecfr.parser.findNode(doc, target);
+    }
+    let partNode = partNodes.get(partIdentifier);
+    if (partNode === undefined) {
+      partNode = ecfr.parser.findNode(doc, { type: 'part', identifier: partIdentifier });
+      partNodes.set(partIdentifier, partNode);
+    }
+    return partNode === null ? ecfr.parser.findNode(doc, target) : ecfr.parser.findNode(partNode, target);
+  };
+
   for (const leaf of input.leaves) {
     if (!leaf.identifier) {
       input.onLeaf(
@@ -107,7 +139,7 @@ export async function processTitleXml(
 
     let node: unknown;
     try {
-      node = ecfr.parser.findNode(doc, { type: leaf.nodeType, identifier: leaf.identifier });
+      node = scopedFind(leaf.citation, { type: leaf.nodeType, identifier: leaf.identifier });
     } catch (error) {
       node = null;
       log.debug('findNode threw', {
@@ -154,7 +186,7 @@ export async function processTitleXml(
 
     let node: unknown;
     try {
-      node = ecfr.parser.findNode(doc, {
+      node = scopedFind(container.citation, {
         type: container.nodeType,
         identifier: container.identifier,
       });
@@ -189,7 +221,7 @@ export async function processTitleXml(
       const flat = input.byCitation.get(citation);
       if (!flat?.identifier) continue;
       try {
-        const node = ecfr.parser.findNode(doc, {
+        const node = scopedFind(citation, {
           type: flat.nodeType,
           identifier: flat.identifier,
         });
