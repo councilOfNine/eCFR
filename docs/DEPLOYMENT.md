@@ -209,7 +209,7 @@ is **not** a failure — it is the system working. Those rows are what `/data-qu
 pnpm --filter @ecfr-atlas/api vendor:scalar         # self-hosted docs bundle
 pnpm exec wrangler deploy --config apps/api/wrangler.jsonc
 
-ECFR_SNAPSHOT_DIR=sync-output/snapshot pnpm build
+ECFR_SNAPSHOT_DIR="$PWD/sync-output/snapshot" pnpm build   # absolute: Astro resolves relative paths against apps/web
 pnpm exec wrangler deploy --config apps/web/wrangler.jsonc
 ```
 

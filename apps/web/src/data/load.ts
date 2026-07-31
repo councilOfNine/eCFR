@@ -14,12 +14,30 @@
  * puts a banner on every page.
  */
 
+import { isAbsolute } from 'node:path';
+
 import type { AtlasData } from './contract.js';
 import { loadD1Source } from './sources/d1-sqlite.js';
 import { loadFixtureSource } from './sources/fixture.js';
 import { loadSnapshotSource } from './sources/snapshot-dir.js';
 
 let pending: Promise<AtlasData> | null = null;
+
+/**
+ * Astro resolves relative paths against apps/web, not against the directory the build was
+ * launched from — a mismatch that has now broken one local build and one CI deploy in a
+ * single evening, each time as a confusing "manifest.json is missing" two minutes in.
+ * Rejecting the relative form up front turns that into an instant, self-explaining error.
+ */
+function mustBeAbsolute(name: string, value: string): void {
+  if (!isAbsolute(value)) {
+    throw new Error(
+      `${name} must be an absolute path, got "${value}". Relative paths resolve against ` +
+        'apps/web under Astro, not your shell working directory — prefix it with $PWD/ ' +
+        'locally, or with the github.workspace expression in CI.',
+    );
+  }
+}
 
 async function resolve(): Promise<AtlasData> {
   const { ECFR_SNAPSHOT_DIR, ECFR_D1_SQLITE, ECFR_USE_FIXTURE } = process.env;
@@ -33,6 +51,7 @@ async function resolve(): Promise<AtlasData> {
   }
 
   if (ECFR_SNAPSHOT_DIR) {
+    mustBeAbsolute('ECFR_SNAPSHOT_DIR', ECFR_SNAPSHOT_DIR);
     const data = await loadSnapshotSource(ECFR_SNAPSHOT_DIR);
     console.log(
       `[data] snapshot ${ECFR_SNAPSHOT_DIR} — run ${data.manifest.run_id ?? 'unknown'}, ` +
@@ -42,6 +61,7 @@ async function resolve(): Promise<AtlasData> {
   }
 
   if (ECFR_D1_SQLITE) {
+    mustBeAbsolute('ECFR_D1_SQLITE', ECFR_D1_SQLITE);
     const data = await loadD1Source(ECFR_D1_SQLITE);
     console.log(
       `[data] local D1 ${ECFR_D1_SQLITE} — run ${data.manifest.run_id ?? 'unknown'}. ` +

@@ -194,7 +194,9 @@ jobs:
 
       - name: Build
         env:
-          ECFR_SNAPSHOT_DIR: sync-output/snapshot
+          # Absolute on purpose: Astro resolves relative paths against apps/web, and the
+          # relative form shipped one deploy that died on "manifest.json is missing".
+          ECFR_SNAPSHOT_DIR: ${{ github.workspace }}/sync-output/snapshot
         run: pnpm build
 
       - name: Assert static-asset budget
