@@ -94,7 +94,13 @@ export async function loadSnapshotSource(dir: string): Promise<AtlasData> {
   async function readContent(key: string): Promise<string> {
     const path = join(dir, 'content', `${key}.html`);
     try {
-      return await readFile(path, 'utf8');
+      const html = await readFile(path, 'utf8');
+      // The renderer opens every part's body with its own `<h1>N CFR Part N</h1>`. The page
+      // template already supplies the canonical h1 (part number, heading, context), and the
+      // accessibility commitment check-html enforces is exactly one h1 per built page.
+      // Demoted rather than stripped: in a very large part the heading is still a useful
+      // landmark in the document outline.
+      return html.replace(/<h1(\s|>)/g, '<h2$1').replace(/<\/h1>/g, '</h2>');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         throw new Error(

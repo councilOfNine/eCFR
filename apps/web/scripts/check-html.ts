@@ -39,12 +39,21 @@ const findings: Finding[] = [];
  * A wide element must scroll inside its own container, never widen the document. The wrapper is
  * `.table-wrap` (overflow-x: auto); tables injected into regulation prose are covered by the
  * `.reg-prose table { display: block; overflow-x: auto }` rule instead.
+ *
+ * `table-wrap` must sit immediately before the table (it is the table's own wrapper), but
+ * `reg-prose` is a CONTAINER: its CSS applies to every descendant table, however deep. The
+ * first real-corpus build proved a fixed window wrong — 10 CFR 100's tables sit 48 KB into
+ * the prose container and were flagged as uncontained while scrolling perfectly. A
+ * string-level check cannot see ancestry, so "the container opened anywhere earlier in the
+ * page" is the approximation; the page shape has no tables after the prose container closes.
  */
 function tablesAreContained(html: string): number[] {
   const offenders: number[] = [];
+  const proseOpensAt = html.indexOf('reg-prose');
   for (const match of html.matchAll(/<table[\s>]/g)) {
     const preceding = html.slice(Math.max(0, match.index - 400), match.index);
-    if (!/\btable-wrap\b/.test(preceding) && !/\breg-prose\b/.test(preceding)) {
+    const insideProse = proseOpensAt !== -1 && proseOpensAt < match.index;
+    if (!/\btable-wrap\b/.test(preceding) && !insideProse) {
       offenders.push(match.index);
     }
   }
@@ -91,7 +100,10 @@ for (const page of pages) {
   }
   // Skeletons are what produced the predecessor's 0.112 CLS. There are none in this design
   // because the HTML arrives complete; this makes that a rule rather than a habit.
-  if (/\b(skeleton|placeholder-shimmer|animate-pulse)\b/.test(html)) {
+  // Matched only inside a class attribute: the CFR regulates literal skeletons (49 CFR 393
+  // covers skeleton trailers, 9 CFR 311 diseased carcasses), so the bare word appears in
+  // honest regulation prose and cannot be the detector.
+  if (/class="[^"]*\b(skeleton|placeholder-shimmer|animate-pulse)\b[^"]*"/.test(html)) {
     fail('contains a loading skeleton — this site ships complete HTML, nothing swaps in');
   }
 
