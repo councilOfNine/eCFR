@@ -306,11 +306,22 @@ export interface NodeTarget {
   identifier?: string;
 }
 
-function matchesTarget(element: XmlElement, target: NodeTarget): boolean {
+/** The § / whitespace stripping half of normalisation, with the case left alone. */
+function strippedIdentifier(value: string): string {
+  return value.replace(/^[\s§]+/, '').trim();
+}
+
+function matchesTarget(element: XmlElement, target: NodeTarget, exactCase: boolean): boolean {
   if (!isStructureElement(element)) return false;
   if (target.type !== undefined && nodeTypeOf(element) !== target.type) return false;
   if (target.identifier !== undefined) {
-    if (identifierOf(element) !== normalizeIdentifier(target.identifier)) return false;
+    if (exactCase) {
+      const raw = element.attrs.N;
+      if (raw === undefined) return false;
+      if (strippedIdentifier(raw) !== strippedIdentifier(target.identifier)) return false;
+    } else if (identifierOf(element) !== normalizeIdentifier(target.identifier)) {
+      return false;
+    }
   }
   return true;
 }
@@ -320,14 +331,26 @@ function matchesTarget(element: XmlElement, target: NodeTarget): boolean {
  *
  * Searches the whole tree rather than descending level by level, precisely because levels are
  * not sequential and a chapter's parent may be the title itself or a subtitle in between.
+ *
+ * Two passes: exact case first, then case-folded. 40 CFR 60 contains sibling subparts `Cc`
+ * and `CC` (and `AAa` and `AAA`) — distinct regulation, and the only such collision in the
+ * corpus — and a folded-only match always returned the first in document order, which is how
+ * subpart CC's sections vanished from the rendered corpus while subpart Cc's appeared twice.
+ * The XML's `N` attributes preserve case, so exact wins when the document honours it; the
+ * folded pass remains the fallback that keeps roman-numeral chapters matching across
+ * source-casing variance, exactly as before, whenever no exact-case node exists.
  */
 export function findNode(root: XmlElement, target: NodeTarget): XmlElement | null {
   if (target.type === undefined && target.identifier === undefined) return null;
+  return findFirst(root, target, true) ?? findFirst(root, target, false);
+}
+
+function findFirst(root: XmlElement, target: NodeTarget, exactCase: boolean): XmlElement | null {
   const stack: XmlNode[] = [root];
   while (stack.length > 0) {
     const node = stack.pop() as XmlNode;
     if (!isElement(node)) continue;
-    if (node !== root && matchesTarget(node, target)) return node;
+    if (node !== root && matchesTarget(node, target, exactCase)) return node;
     // Pushed in reverse so the pop order is document order; a title with two chapters sharing
     // an identifier (it happens across subtitles) should resolve to the first.
     for (let i = node.children.length - 1; i >= 0; i -= 1) {
@@ -362,7 +385,9 @@ export function findAllNodes(root: XmlElement, target: NodeTarget): XmlElement[]
   const found: XmlElement[] = [];
   const visit = (node: XmlNode): void => {
     if (!isElement(node)) return;
-    if (node !== root && matchesTarget(node, target)) found.push(node);
+    // Folded on purpose: a collector gathers every plausible match; only single-node
+    // resolution (findNode) needs the exact-case pass to pick between case-colliding twins.
+    if (node !== root && matchesTarget(node, target, false)) found.push(node);
     for (const child of node.children) visit(child);
   };
   visit(root);
