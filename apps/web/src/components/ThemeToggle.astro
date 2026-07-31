@@ -1,14 +1,17 @@
 ---
 /**
- * The site's entire interactive surface outside the sortable table and the copy button: three
- * states, one button, no framework.
+ * Light/dark toggle. Two states, one icon button, no framework.
  *
- * It ships hidden and is revealed by its own script, so a no-JS reader is never shown a control
- * that does nothing. The default state follows the OS via `color-scheme: light dark`, so the
- * button is an override rather than the mechanism.
+ * The default is the OS preference, applied by the pre-paint script in Base.astro; this
+ * button is an explicit override persisted to localStorage. There is deliberately no third
+ * "system" state: its wider label re-wrapped the header row, and a reader who never touches
+ * the button already gets the OS behaviour — that state only existed to name the absence of
+ * an override.
  *
- * The labels ride on data attributes so the client script never imports the strings module —
- * importing it would bundle the site's whole copy into JS every reader downloads.
+ * Ships `invisible` rather than `hidden`: the box keeps its size before the script reveals
+ * it, so the header never reflows. A no-JS reader sees a stable gap instead of a control
+ * that does nothing. Icon-only; the accessible name (the ACTION, "Switch to …") rides on
+ * aria-label, and which icon shows is pure CSS keyed on [data-theme].
  */
 import { STRINGS } from '../constants/strings';
 ---
@@ -16,50 +19,71 @@ import { STRINGS } from '../constants/strings';
 <button
   type="button"
   id="theme-toggle"
-  class="badge badge-neutral hidden"
-  aria-live="polite"
-  data-label-system={STRINGS.themeToggle.system}
-  data-label-light={STRINGS.themeToggle.light}
-  data-label-dark={STRINGS.themeToggle.dark}
+  class="badge badge-neutral invisible"
+  data-label-to-light={STRINGS.themeToggle.toLight}
+  data-label-to-dark={STRINGS.themeToggle.toDark}
 >
-  {STRINGS.themeToggle.system}
+  <svg
+    class="theme-icon-sun"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4"></circle>
+    <path
+      d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"
+    ></path>
+  </svg>
+  <svg
+    class="theme-icon-moon"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+  </svg>
 </button>
 
 <script>
   const KEY = 'ecfr-theme';
-  const ORDER = ['system', 'light', 'dark'] as const;
-  type Mode = (typeof ORDER)[number];
-
   const button = document.getElementById('theme-toggle');
   if (button instanceof HTMLButtonElement) {
-    button.classList.remove('hidden');
+    // Base.astro's pre-paint script has already stamped data-theme; this reads rather than
+    // re-derives so the two can never disagree. Anything unexpected counts as dark, matching
+    // the pre-paint fallback.
+    const current = (): 'light' | 'dark' =>
+      document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
 
-    const read = (): Mode => {
-      try {
-        const stored = localStorage.getItem(KEY);
-        return stored === 'light' || stored === 'dark' ? stored : 'system';
-      } catch {
-        return 'system';
-      }
+    const label = (mode: 'light' | 'dark') => {
+      button.setAttribute(
+        'aria-label',
+        (mode === 'dark' ? button.dataset.labelToLight : button.dataset.labelToDark) ?? '',
+      );
     };
 
-    const apply = (mode: Mode) => {
-      if (mode === 'system') delete document.documentElement.dataset.theme;
-      else document.documentElement.dataset.theme = mode;
-      button.textContent = button.dataset[`label${mode[0]!.toUpperCase()}${mode.slice(1)}`] ?? '';
-    };
-
-    apply(read());
+    label(current());
+    button.classList.remove('invisible');
 
     button.addEventListener('click', () => {
-      const next = ORDER[(ORDER.indexOf(read()) + 1) % ORDER.length]!;
+      const next = current() === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
       try {
-        if (next === 'system') localStorage.removeItem(KEY);
-        else localStorage.setItem(KEY, next);
+        localStorage.setItem(KEY, next);
       } catch {
         /* Storage blocked; the override still applies for this page view. */
       }
-      apply(next);
+      label(next);
     });
   }
 </script>

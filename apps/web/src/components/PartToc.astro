@@ -2,49 +2,78 @@
 /**
  * The reader's table of contents.
  *
- * Plain anchors in a <nav>, so it is keyboard-navigable by default — tab moves through it, enter
- * follows, and the browser's own find-in-page works on it. The active-section highlight is added
- * by an IntersectionObserver, which is the only JS here and is purely decorative: with it
- * disabled the TOC still navigates correctly.
+ * Rows arrive with their destination already decided by the page (see PartTocRow): a plain
+ * anchor for a section on this page, a cross-page link into the owning slice on a split-part
+ * index, or no link at all for a reserved range — there is nothing to jump to, and a link
+ * that lands nowhere is worse than a label.
+ *
+ * Plain anchors in a <nav>, so it is keyboard-navigable by default — tab moves through it,
+ * enter follows, and the browser's own find-in-page works on it. The active-section
+ * highlight is added by an IntersectionObserver, which is the only JS here and is purely
+ * decorative: with it disabled the TOC still navigates correctly. Only same-page rows carry
+ * `data-toc-target`, so the observer never tracks a link that leaves the page.
  *
  * `scroll-margin-top` on the headings (see global.css) keeps a jumped-to section clear of the
- * viewport edge without any scroll maths.
+ * viewport edge without any scroll maths. The list's pl-1/-ml-1 pair gives focus rings room
+ * inside the overflow clip without shifting its left edge out of alignment.
  */
 import { STRINGS } from '../constants/strings';
-import type { SectionEntry } from '../data/contract';
+import type { PartTocRow } from './types';
 import WordCountView from './WordCount.astro';
 
 interface Props {
-  sections: SectionEntry[];
+  rows: PartTocRow[];
 }
 
-const { sections } = Astro.props;
+const { rows } = Astro.props;
 ---
 
 <nav aria-labelledby="toc-heading" class="text-sm" data-part-toc>
   <h2 id="toc-heading" class="eyebrow mb-2">
-    {STRINGS.partToc.heading}<span class="ml-1 font-normal normal-case tracking-normal">{STRINGS.partToc.count(sections.length)}</span>
+    {STRINGS.partToc.heading}<span class="ml-1 font-normal normal-case tracking-normal">{STRINGS.partToc.count(rows.length)}</span>
   </h2>
   {
-    sections.length === 0 ? (
+    rows.length === 0 ? (
       <p class="text-xs text-[color:var(--color-ink-subtle)]">
         {STRINGS.partToc.empty}
       </p>
     ) : (
-      <ol class="max-h-[70vh] overflow-y-auto pr-1">
-        {sections.map((section) => (
+      <ol class="-ml-1 max-h-[70vh] overflow-y-auto pl-1 pr-1">
+        {rows.map((row) => (
           <li>
-            <a href={`#${section.anchor}`} class="toc-link" data-toc-target={section.anchor}>
-              <span class="flex items-baseline justify-between gap-2">
-                <span class="truncate">
-                  <span class="font-mono text-[0.72rem] text-[color:var(--color-ink-subtle)]">
-                    §&nbsp;{section.identifier}
+            {row.href === null ? (
+              <span class="toc-link toc-link-static">
+                <span class="flex items-baseline justify-between gap-2">
+                  <span class="truncate">
+                    <span class="font-mono text-[0.72rem] text-[color:var(--color-ink-subtle)]">
+                      §&nbsp;{row.section.identifier}
+                    </span>
+                    <span class="ml-1">
+                      {row.section.reserved ? STRINGS.common.reservedHeading : row.section.label}
+                    </span>
                   </span>
-                  <span class="ml-1">{section.reserved ? STRINGS.common.reservedHeading : section.label}</span>
+                  <WordCountView value={row.section.word_count} variant="compact" class="text-[0.68rem]" />
                 </span>
-                <WordCountView value={section.word_count} variant="compact" class="text-[0.68rem]" />
               </span>
-            </a>
+            ) : (
+              <a
+                href={row.href}
+                class="toc-link"
+                data-toc-target={row.samePage ? row.section.anchor : undefined}
+              >
+                <span class="flex items-baseline justify-between gap-2">
+                  <span class="truncate">
+                    <span class="font-mono text-[0.72rem] text-[color:var(--color-ink-subtle)]">
+                      §&nbsp;{row.section.identifier}
+                    </span>
+                    <span class="ml-1">
+                      {row.section.reserved ? STRINGS.common.reservedHeading : row.section.label}
+                    </span>
+                  </span>
+                  <WordCountView value={row.section.word_count} variant="compact" class="text-[0.68rem]" />
+                </span>
+              </a>
+            )}
           </li>
         ))}
       </ol>

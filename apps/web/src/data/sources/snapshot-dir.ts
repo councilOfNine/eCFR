@@ -112,6 +112,33 @@ export async function loadSnapshotSource(dir: string): Promise<AtlasData> {
     }
   }
 
+  /**
+   * Give every rendered section the id its TOC link targets.
+   *
+   * The renderer marks sections with `data-identifier` but emits no ids; the fixture content
+   * carried ids, so the TOC's anchors worked in fixture builds and silently broke on the
+   * real corpus. Ids are taken from the page's own section list — the same rows the TOC
+   * renders — so link and target cannot disagree. Matching is case-insensitive because the
+   * XML uppercases identifiers ("60.20A") while the structure JSON the anchors derive from
+   * does not ("60.20a").
+   */
+  function injectSectionAnchors(
+    html: string,
+    sections: readonly { identifier: string; anchor: string }[],
+  ): string {
+    if (sections.length === 0) return html;
+    const anchorByIdentifier = new Map(
+      sections.map((s) => [s.identifier.toLowerCase(), s.anchor]),
+    );
+    return html.replace(
+      /<section class="reg-section" data-identifier="([^"]*)"/g,
+      (match, identifier: string) => {
+        const anchor = anchorByIdentifier.get(identifier.toLowerCase());
+        return anchor === undefined ? match : `${match} id="${anchor}"`;
+      },
+    );
+  }
+
   return {
     manifest,
     routes,
@@ -150,9 +177,30 @@ export async function loadSnapshotSource(dir: string): Promise<AtlasData> {
       if (raw === null) return null;
 
       const page = parseChecked(PartPage, raw, file);
+
+      // Split-part index: map each section anchor to the slice page that carries its text, by
+      // reading the slice JSONs themselves — the same rows those pages render — rather than
+      // re-deriving subpart ranges from slice slugs.
+      let sliceByAnchor: Record<string, string> | null = null;
+      if (page.slice === null && page.slices.length > 0) {
+        sliceByAnchor = {};
+        for (const ref of page.slices) {
+          if (ref.subpart === null) continue;
+          const sliceFile = join(base, seg(partId), `${seg(ref.subpart)}.json`);
+          const sliceRaw = await readJsonOrNull(sliceFile);
+          if (sliceRaw === null) continue;
+          const slicePage = parseChecked(PartPage, sliceRaw, sliceFile);
+          for (const s of slicePage.section_list) sliceByAnchor[s.anchor] = ref.subpart;
+        }
+      }
+
       const view: PartView = {
         ...page,
-        content_html: page.content_key === null ? null : await readContent(page.content_key),
+        content_html:
+          page.content_key === null
+            ? null
+            : injectSectionAnchors(await readContent(page.content_key), page.section_list),
+        slice_by_anchor: sliceByAnchor,
       };
       return view;
     },

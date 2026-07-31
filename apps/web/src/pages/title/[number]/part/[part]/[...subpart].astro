@@ -20,6 +20,7 @@
  */
 import type { GetStaticPaths } from 'astro';
 import Breadcrumbs from '../../../../../components/Breadcrumbs.astro';
+import type { PartTocRow } from '../../../../../components/types';
 import Callout from '../../../../../components/Callout.astro';
 import CopyCitation from '../../../../../components/CopyCitation.astro';
 import PartToc from '../../../../../components/PartToc.astro';
@@ -54,6 +55,25 @@ if (!part) {
 
 const isSliceIndex = part.slices.length > 0 && part.slice === null;
 const heading = part.reserved ? STRINGS.partPage.reservedHeading(part.display) : part.label;
+
+/**
+ * Where each TOC row points. Three cases: a reserved range has no text to land on (plain
+ * row); on a whole part or a slice page every listed section is in THIS page's content
+ * (fragment); on a split-part index the text lives on a slice page (cross-page link into it,
+ * resolved from the slice JSONs by the loader).
+ */
+const tocRows: PartTocRow[] = part.section_list.map((section) => {
+  if (section.reserved) return { section, href: null, samePage: false };
+  if (!isSliceIndex) return { section, href: `#${section.anchor}`, samePage: true };
+  const slice = part.slice_by_anchor?.[section.anchor];
+  return slice === undefined
+    ? { section, href: null, samePage: false }
+    : {
+        section,
+        href: `${route.part(part.title_number, part.identifier, slice)}#${section.anchor}`,
+        samePage: false,
+      };
+});
 ---
 
 <Base
@@ -264,7 +284,7 @@ const heading = part.reserved ? STRINGS.partPage.reservedHeading(part.display) :
         )
       }
 
-      <PartToc sections={part.section_list} />
+      <PartToc rows={tocRows} />
 
       <p class="mt-5 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
         {STRINGS.partPage.boilerplateNote}

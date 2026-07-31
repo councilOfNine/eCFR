@@ -43,15 +43,22 @@ const fullTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
       Runs before first paint so a stored preference cannot flash the wrong theme. It is
       `is:inline` on purpose: a hashed, deferred module would run after paint, which is exactly
       the swap that produced the predecessor's 0.112 CLS.
+
+      `data-theme` is ALWAYS set — stored override first, otherwise the OS preference — because
+      the theme toggle's icon and the [data-theme] variable blocks key off it. When neither is
+      readable (storage blocked AND matchMedia missing) the site defaults to dark.
     */}
     <script is:inline>
       try {
         const stored = localStorage.getItem('ecfr-theme');
-        if (stored === 'light' || stored === 'dark') {
-          document.documentElement.dataset.theme = stored;
-        }
+        document.documentElement.dataset.theme =
+          stored === 'light' || stored === 'dark'
+            ? stored
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
       } catch {
-        /* Storage blocked. The `color-scheme: light dark` default already handles this. */
+        document.documentElement.dataset.theme = 'dark';
       }
     </script>
   </head>

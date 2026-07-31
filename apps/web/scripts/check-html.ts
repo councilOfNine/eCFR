@@ -98,6 +98,15 @@ for (const page of pages) {
   if (offenders.length > 0) {
     fail(`${offenders.length} table(s) outside a .table-wrap scroll container`);
   }
+  // Every TOC link must land. The reader TOC's anchors broke silently on the first real
+  // corpus (the renderer emits no ids; only the fixture content had them) — a dead in-page
+  // jump is invisible to every other check, so it is asserted here on every page.
+  for (const match of html.matchAll(/data-toc-target="([^"]*)"/g)) {
+    if (!html.includes(`id="${match[1]}"`)) {
+      fail(`TOC link #${match[1]} has no matching id in the page`);
+    }
+  }
+
   // Skeletons are what produced the predecessor's 0.112 CLS. There are none in this design
   // because the HTML arrives complete; this makes that a rule rather than a habit.
   // Matched only inside a class attribute: the CFR regulates literal skeletons (49 CFR 393

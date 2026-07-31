@@ -805,6 +805,7 @@ export async function loadD1Source(path: string): Promise<AtlasData> {
           'in R2 rather than the text itself. Build from a snapshot (ECFR_SNAPSHOT_DIR) to include ' +
           'the full text, or read this part on the official eCFR.',
         content_html: null,
+        slice_by_anchor: null,
       });
     },
 

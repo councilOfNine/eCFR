@@ -252,6 +252,7 @@ function partView(
     content_key: null,
     content_unavailable_reason: null,
     content_html: null,
+    slice_by_anchor: null,
   };
   const merged = { ...base, ...over };
   // The count is always the length of the list, never a second hand-maintained number.
@@ -280,6 +281,7 @@ PARTS.set(
     agencies: [EPA, OAR],
     content_key: 'title-40-part-60',
     content_html: PART_BODY_60,
+    slice_by_anchor: null,
   }),
 );
 

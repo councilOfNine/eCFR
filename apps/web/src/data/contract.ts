@@ -398,6 +398,12 @@ export type PartPage = z.infer<typeof PartPage>;
 /** What the loader hands a page: `PartPage` with the body already read off disk. */
 export interface PartView extends PartPage {
   content_html: string | null;
+  /**
+   * Split-part index pages only: which slice page carries each section anchor, so the TOC
+   * can link into the right slice instead of emitting same-page fragments that land nowhere.
+   * Null everywhere else — whole parts, slice pages, and sources without slice files.
+   */
+  slice_by_anchor: Record<string, string> | null;
 }
 
 // ─── shared jurisdiction ─────────────────────────────────────────────────────

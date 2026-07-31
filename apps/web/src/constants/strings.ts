@@ -116,9 +116,8 @@ export const STRINGS = {
   },
 
   themeToggle: {
-    system: 'Theme: system',
-    light: 'Theme: light',
-    dark: 'Theme: dark',
+    toLight: 'Switch to light theme',
+    toDark: 'Switch to dark theme',
   },
 
   barChart: {

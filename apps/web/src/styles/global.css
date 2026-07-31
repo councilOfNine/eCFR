@@ -576,3 +576,22 @@
     border: 0;
   }
 }
+
+/* A TOC row with nothing to jump to (reserved ranges) keeps the layout, not the affordance. */
+.toc-link-static {
+  cursor: default;
+}
+
+/*
+ * The theme toggle shows the CURRENT theme's icon; the switch is CSS-only off [data-theme],
+ * which the pre-paint script in Base.astro always sets.
+ */
+.theme-icon-moon {
+  display: none;
+}
+:root[data-theme='dark'] .theme-icon-sun {
+  display: none;
+}
+:root[data-theme='dark'] .theme-icon-moon {
+  display: inline-block;
+}

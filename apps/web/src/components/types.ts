@@ -8,6 +8,8 @@
 
 import type { WordCount } from '@ecfr-atlas/core/api-schemas';
 
+import type { SectionEntry } from '../data/contract';
+
 /**
  * WordCount.astro's presentation modes, in the repo's const-object-plus-union shape so the
  * component can dispatch on them exhaustively (see the switch in its frontmatter).
@@ -31,4 +33,13 @@ export interface BarRow {
   value: WordCount;
   /** Optional trailing marker, e.g. a shared-jurisdiction pill. */
   note?: string;
+}
+
+/** One reader-TOC row, with its link destination already decided by the page. */
+export interface PartTocRow {
+  section: SectionEntry;
+  /** Null renders a plain row: reserved sections, and split-index rows with no known slice. */
+  href: string | null;
+  /** True only for a same-page fragment; enables data-toc-target and the scroll highlight. */
+  samePage: boolean;
 }
