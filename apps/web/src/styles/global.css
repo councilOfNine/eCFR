@@ -597,9 +597,9 @@
 .theme-icon-moon {
   display: none;
 }
-:root[data-theme='dark'] .theme-icon-sun {
+:root[data-theme="dark"] .theme-icon-sun {
   display: none;
 }
-:root[data-theme='dark'] .theme-icon-moon {
+:root[data-theme="dark"] .theme-icon-moon {
   display: inline-block;
 }

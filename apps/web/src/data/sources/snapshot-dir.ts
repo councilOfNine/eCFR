@@ -127,9 +127,7 @@ export async function loadSnapshotSource(dir: string): Promise<AtlasData> {
     sections: readonly { identifier: string; anchor: string }[],
   ): string {
     if (sections.length === 0) return html;
-    const anchorByIdentifier = new Map(
-      sections.map((s) => [s.identifier.toLowerCase(), s.anchor]),
-    );
+    const anchorByIdentifier = new Map(sections.map((s) => [s.identifier.toLowerCase(), s.anchor]));
     return html.replace(
       /<section class="reg-section" data-identifier="([^"]*)"/g,
       (match, identifier: string) => {

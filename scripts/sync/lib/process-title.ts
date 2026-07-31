@@ -121,7 +121,9 @@ export async function processTitleXml(
       partNode = ecfr.parser.findNode(doc, { type: 'part', identifier: partIdentifier });
       partNodes.set(partIdentifier, partNode);
     }
-    return partNode === null ? ecfr.parser.findNode(doc, target) : ecfr.parser.findNode(partNode, target);
+    return partNode === null
+      ? ecfr.parser.findNode(doc, target)
+      : ecfr.parser.findNode(partNode, target);
   };
 
   for (const leaf of input.leaves) {
