@@ -89,12 +89,20 @@
     line-height: 1.55;
   }
 
-  :where(a) {
+  /* Plain `a`, not :where(a): Tailwind's preflight resets anchors at element specificity
+     (`a { color: inherit; text-decoration: inherit }`), which silently buried the
+     zero-specificity version of this rule — every unclassed link on the site rendered as
+     body ink, indistinguishable from prose. Element specificity later in the same layer
+     wins; components with their own classes (nav, badges, toc links) still override. The
+     underline is explicit for the same reason, and because colour alone is not an
+     affordance. */
+  a {
     color: var(--color-accent);
+    text-decoration-line: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0.15em;
   }
-  :where(a):hover {
+  a:hover {
     color: var(--color-accent-strong);
   }
 
