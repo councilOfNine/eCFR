@@ -1,0 +1,108 @@
+---
+/**
+ * Reader education, question-first. The glossary defines terms; this page answers the
+ * questions a first-time visitor actually arrives with. Prose stays in this file per the
+ * strings-module policy (sentences interleave links and emphasis).
+ */
+import PageHeader from '../components/PageHeader.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { formatDate } from '../data/format';
+import { atlas } from '../data/load';
+import * as route from '../data/routes';
+import Base from '../layouts/Base.astro';
+
+const { manifest } = await atlas();
+---
+
+<Base title={STRINGS.faqPage.title} description={STRINGS.faqPage.description} section="faq">
+  <PageHeader
+    eyebrow={STRINGS.faqPage.eyebrow}
+    title={STRINGS.faqPage.heading}
+    standfirst={STRINGS.faqPage.standfirst}
+  />
+
+  <div class="prose-page">
+    <h2 id="what-is-the-cfr">What is the CFR?</h2>
+    <p>
+      The Code of Federal Regulations is the official rulebook of the US federal government.
+      When Congress passes a law, agencies write the detailed rules that put it into practice
+      — what a food label must say, how much of a pollutant a plant may emit, how a pension
+      must be reported. Those rules, collected and organised into 50 subject-matter titles,
+      are the CFR. It is the day-to-day law that businesses and agencies actually operate
+      under.
+    </p>
+
+    <h2 id="what-is-the-ecfr">What is the eCFR, and how is it different?</h2>
+    <p>
+      The <a href="https://www.ecfr.gov" rel="external noopener">eCFR</a> is the government's
+      continuously updated online edition of the CFR — new rule changes appear within days.
+      The printed CFR is republished only once a year, so the eCFR is what anyone who needs
+      current rules actually reads. This site measures the eCFR.
+    </p>
+
+    <h2 id="is-this-official">Is this site an official government source?</h2>
+    <p>
+      No. {SITE.name} is an independent, open-source project with no government affiliation.
+      Every page links back to the official text on the eCFR, and every number here is this
+      project's own measurement. For legal purposes, only the annual printed CFR and the
+      Federal Register are authoritative — details on the
+      <a href={route.about()}>about page</a>.
+    </p>
+
+    <h2 id="how-current">How current is the data?</h2>
+    <p>
+      {
+        manifest.source_date
+          ? `The current build reflects the eCFR as of ${formatDate(manifest.source_date)}.`
+          : 'The source date for this build is recorded in the footer.'
+      }
+      The site re-measures the eCFR every weekday, and every page footer carries the exact
+      date its data reflects. A change the government published yesterday is typically
+      measured here within a business day.
+    </p>
+
+    <h2 id="why-word-counts">Why measure regulation in words?</h2>
+    <p>
+      Words are a blunt instrument — but an honest one. Counting pages depends on formatting;
+      counting “rules” depends on what you call a rule; words can be measured the same way for
+      every agency and compared over time. A word count will not tell you whether a rule is
+      wise, but it tells you where the bulk of the rulebook sits, which is where research
+      starts.
+    </p>
+
+    <h2 id="why-two-numbers">Why do agencies show two different numbers?</h2>
+    <p>
+      Because some rules have more than one agency in charge. An agency's
+      <strong>total regulation</strong> counts every rule it manages in full — shared or not —
+      which is the right way to state its responsibility. Its
+      <strong>share of all regulation</strong> splits jointly managed rules evenly between
+      their agencies, which is the right way to compare or add agencies without counting any
+      rule twice. When an agency shares nothing, the two numbers are identical. The
+      <a href={route.glossary()}>glossary</a> has the full definitions.
+    </p>
+
+    <h2 id="what-is-not-measured">Why do some values say “Not measured”?</h2>
+    <p>
+      When something could not be measured — a fetch failed, a document would not parse — this
+      site says so instead of guessing. A dash with a reason can be investigated; a silently
+      wrong number cannot. The <a href={route.dataQuality()}>data quality page</a> lists every
+      unmeasured value in the current build, with its reason.
+    </p>
+
+    <h2 id="how-words-counted">How exactly are words counted?</h2>
+    <p>
+      By parsing the eCFR's official XML and counting the words of regulation text, with
+      headings, authority notes, source citations and tables of contents excluded. Nothing is
+      estimated from file sizes or extrapolated. The precise rules — written to be disagreed
+      with — are on the <a href={route.methodology()}>methodology page</a>.
+    </p>
+
+    <h2 id="can-i-use-the-data">Can I use this data?</h2>
+    <p>
+      Yes. The project is open source, and everything on the site is available as JSON from
+      the <a href={route.apiPage()}>public API</a> under the same measurement rules — anonymous
+      access works immediately, and a free key raises the rate limit.
+    </p>
+  </div>
+</Base>

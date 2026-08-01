@@ -19,7 +19,7 @@ export const SITE = {
   /** Shown in the header brand, the tab title suffix and citations. */
   name: env.PUBLIC_SITE_NAME ?? 'eCFR Atlas',
   /** The one-line description beside the brand in the header. */
-  tagline: env.PUBLIC_SITE_TAGLINE ?? 'a measured map of federal regulation',
+  tagline: env.PUBLIC_SITE_TAGLINE ?? 'Federal regulation map',
   /** Canonical origin for `<link rel="canonical">`, og:url and the sitemap. No trailing slash. */
   canonicalOrigin: env.PUBLIC_SITE_URL ?? 'https://ecfr.fixit.works',
   /** Public origin of the API Worker (apps/api), linked from /api. Never fetched at runtime. */

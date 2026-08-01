@@ -3,12 +3,6 @@ import AgencyTable from '../components/AgencyTable.astro';
 import AmendmentTimeline from '../components/AmendmentTimeline.astro';
 import BarChart from '../components/BarChart.astro';
 import Callout from '../components/Callout.astro';
-import Stat from '../components/Stat.astro';
-import type { BarRow } from '../components/types';
-import WordCountView from '../components/WordCount.astro';
-import { SITE } from '../constants/site';
-import { STRINGS } from '../constants/strings';
-import { formatDate, formatInt, formatPct, isKnown, shareOf } from '../data/format';
 /**
  * The dashboard.
  *
@@ -19,6 +13,13 @@ import { formatDate, formatInt, formatPct, isKnown, shareOf } from '../data/form
  * wants depends on whether they are asking "who is responsible for this?" or "how does the CFR
  * divide up?".
  */
+import InfoTip from '../components/InfoTip.astro';
+import Stat from '../components/Stat.astro';
+import type { BarRow } from '../components/types';
+import WordCountView from '../components/WordCount.astro';
+import { SITE } from '../constants/site';
+import { STRINGS } from '../constants/strings';
+import { formatDate, formatInt, formatPct, isKnown, shareOf } from '../data/format';
 import { atlas } from '../data/load';
 import * as route from '../data/routes';
 import Base from '../layouts/Base.astro';
@@ -83,7 +84,7 @@ const sharedShare = shareOf(corpus.shared, corpus.deduplicated);
     <h2 id="totals-heading" class="visually-hidden">{STRINGS.dashboard.totalsHeading}</h2>
 
     <div class="card">
-      <p class="eyebrow">{STRINGS.dashboard.deduplicated.eyebrow}</p>
+      <p class="eyebrow">{STRINGS.dashboard.deduplicated.eyebrow}<InfoTip term="total-federal-regulation" /></p>
       <p class="mt-2">
         <WordCountView value={corpus.deduplicated} variant="headline" showReason />
       </p>
@@ -94,7 +95,7 @@ const sharedShare = shareOf(corpus.shared, corpus.deduplicated);
 
     <div class="flex flex-col gap-4">
       <div class="card">
-        <p class="eyebrow">{STRINGS.dashboard.attributed.eyebrow}</p>
+        <p class="eyebrow">{STRINGS.dashboard.attributed.eyebrow}<InfoTip term="counting-shared-in-full" /></p>
         <p class="mt-1"><WordCountView value={corpus.attributed} variant="lg" showReason /></p>
         <p class="mt-2 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
           A shared scope counted in full for every agency claiming it, so a scope with
@@ -105,7 +106,7 @@ const sharedShare = shareOf(corpus.shared, corpus.deduplicated);
         </p>
       </div>
       <div class="card">
-        <p class="eyebrow">{STRINGS.dashboard.shared.eyebrow}</p>
+        <p class="eyebrow">{STRINGS.dashboard.shared.eyebrow}<InfoTip term="shared-rules" /></p>
         <p class="mt-1"><WordCountView value={corpus.shared} variant="lg" showReason /></p>
         <p class="mt-2 text-xs leading-relaxed text-[color:var(--color-ink-subtle)]">
           {STRINGS.dashboard.shared.scopeCount(formatInt(corpus.shared_scopes))}

@@ -13,6 +13,7 @@ import AmendmentTimeline from '../../components/AmendmentTimeline.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import Callout from '../../components/Callout.astro';
 import CoverageBadge from '../../components/CoverageBadge.astro';
+import InfoTip from '../../components/InfoTip.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import WordCountView from '../../components/WordCount.astro';
 import { STRINGS } from '../../constants/strings';
@@ -77,17 +78,17 @@ const measuredScopes = agency.scopes.filter((scope) => isKnown(scope.word_count)
   {/* ── totals ────────────────────────────────────────────────────────────── */}
   <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.agencyDetail.cardsLabel}>
     <div class="card">
-      <p class="eyebrow">{STRINGS.agencyDetail.deduplicated.eyebrow}</p>
-      <p class="mt-1"><WordCountView value={agency.deduplicated} variant="lg" showReason /></p>
-      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
-        {STRINGS.agencyDetail.deduplicated.note}
-      </p>
-    </div>
-    <div class="card">
-      <p class="eyebrow">{STRINGS.agencyDetail.attributed.eyebrow}</p>
+      <p class="eyebrow">{STRINGS.agencyDetail.attributed.eyebrow}<InfoTip term="total-regulation" /></p>
       <p class="mt-1"><WordCountView value={agency.attributed} variant="lg" showReason /></p>
       <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
         {STRINGS.agencyDetail.attributed.note}
+      </p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">{STRINGS.agencyDetail.deduplicated.eyebrow}<InfoTip term="share-of-regulation" /></p>
+      <p class="mt-1"><WordCountView value={agency.deduplicated} variant="lg" showReason /></p>
+      <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
+        {STRINGS.agencyDetail.deduplicated.note}
       </p>
     </div>
     <div class="card">

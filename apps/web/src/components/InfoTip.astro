@@ -1,0 +1,22 @@
+---
+/**
+ * The ⓘ beside a term: hover for the one-line definition (native title tooltip — zero JS,
+ * works with keyboard focus and screen readers via the aria-label), click to land on the
+ * full glossary entry. The term key IS the glossary anchor, so the tip and the entry cannot
+ * drift apart.
+ */
+import { STRINGS } from '../constants/strings';
+import * as route from '../data/routes';
+
+interface Props {
+  term: keyof (typeof STRINGS)['infoTip']['defs'];
+}
+const { term } = Astro.props;
+const def = STRINGS.infoTip.defs[term];
+---
+
+<a
+  href={`${route.glossary()}#${term}`}
+  class="info-tip"
+  title={def}
+  aria-label={`${def} ${STRINGS.infoTip.ariaSuffix}`}>ⓘ</a>

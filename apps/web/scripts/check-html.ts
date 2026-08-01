@@ -87,7 +87,11 @@ for (const page of pages) {
   // hear a bare dash with no explanation.
   const marks = (html.match(/data-unmeasured/g) ?? []).length;
   const phrases = (html.match(/Not measured/g) ?? []).length;
-  if (marks !== phrases) {
+  // The glossary and FAQ *define* the term, so the phrase legitimately appears there with no
+  // rendered value behind it. Exempted by name rather than loosened for everyone: on every
+  // page that renders figures, the pairing stays exact.
+  const definesTheTerm = rel === 'glossary/index.html' || rel === 'faq/index.html';
+  if (marks !== phrases && !definesTheTerm) {
     fail(
       `${marks} unmeasured values but ${phrases} "Not measured" labels — every em dash must say why`,
     );

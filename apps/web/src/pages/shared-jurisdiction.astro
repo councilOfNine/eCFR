@@ -10,6 +10,7 @@
  */
 import { parseRefKey } from '@ecfr-atlas/core';
 import Callout from '../components/Callout.astro';
+import InfoTip from '../components/InfoTip.astro';
 import PageHeader from '../components/PageHeader.astro';
 import WordCountView from '../components/WordCount.astro';
 import { STRINGS } from '../constants/strings';
@@ -49,14 +50,14 @@ const agenciesInvolved = new Set(scopes.flatMap((s) => s.agencies.map((a) => a.s
 
   <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={STRINGS.sharedJurisdiction.summaryLabel}>
     <div class="card">
-      <p class="eyebrow">{STRINGS.sharedJurisdiction.scopesCard.eyebrow}</p>
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.scopesCard.eyebrow}<InfoTip term="shared-rules" /></p>
       <p class="figure figure-lg mt-1">{formatInt(scopes.length)}</p>
       <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
         {STRINGS.sharedJurisdiction.scopesCard.note(formatInt(corpus.refs_total))}
       </p>
     </div>
     <div class="card">
-      <p class="eyebrow">{STRINGS.sharedJurisdiction.wordsCard.eyebrow}</p>
+      <p class="eyebrow">{STRINGS.sharedJurisdiction.wordsCard.eyebrow}<InfoTip term="share-of-regulation" /></p>
       <p class="mt-1"><WordCountView value={corpus.shared} variant="lg" /></p>
       <p class="mt-2 text-xs text-[color:var(--color-ink-subtle)]">
         {sharePct !== null && STRINGS.sharedJurisdiction.wordsCard.note(formatPct(sharePct))}

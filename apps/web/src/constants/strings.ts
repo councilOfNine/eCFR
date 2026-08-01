@@ -60,13 +60,14 @@ export const STRINGS = {
       dashboard: 'Dashboard',
       agencies: 'Agencies',
       titles: 'Titles',
-      shared: 'Shared jurisdiction',
+      shared: 'Shared rules',
       quality: 'Data quality',
       methodology: 'Methodology',
+      faq: 'FAQ',
       api: 'API',
     },
     /** Precedes the <time> element carrying the snapshot date. */
-    sourceDatePrefix: 'eCFR as of',
+    sourceDatePrefix: 'Updated',
   },
 
   footer: {
@@ -82,9 +83,11 @@ export const STRINGS = {
     links: {
       agencies: 'Agencies',
       titles: 'CFR titles',
-      shared: 'Shared jurisdiction',
+      shared: 'Shared rules',
       quality: 'Data quality',
       methodology: 'Methodology',
+      glossary: 'Glossary',
+      faq: 'FAQ',
       api: 'Public API',
       about: 'About & attribution',
       officialEcfr: 'Official eCFR ↗',
@@ -143,20 +146,21 @@ export const STRINGS = {
   },
 
   agencyTable: {
-    defaultCaption: 'Agencies by deduplicated word count',
+    defaultCaption: 'Agencies by share of all federal regulation',
     columns: {
       agency: 'Agency',
-      deduplicated: 'Deduplicated',
-      attributed: 'Attributed',
+      deduplicated: 'Share',
+      attributed: 'Total',
       scopes: 'Scopes',
       coverage: 'Coverage',
     },
     sharedBadge: (n: number) => `shared ×${n}`,
     sharedBadgeTitle: (n: number) =>
-      `${n} of this agency's scopes are co-claimed by another agency`,
+      `${n} of the rules this agency manages are managed jointly with another agency`,
     sortNote:
-      'Default order is deduplicated word count, highest first. Agencies whose total could not ' +
-      'be measured sort last in both directions — they are not zero.',
+      'Default order is share of regulation, highest first — jointly managed rules split ' +
+      'evenly, so shares can be compared fairly. Agencies whose total could not be measured ' +
+      'sort last in both directions — they are not zero.',
     unmeasuredNote: (unmeasured: string, total: string) =>
       `${unmeasured} of ${total} agencies have no measured total in this build.`,
     filterPlaceholder: 'Filter agencies…',
@@ -216,19 +220,19 @@ export const STRINGS = {
       'could not be measured it appears as an em dash carrying the reason, never as zero.',
     /** Leading space: appended to the intro sentence inside the same paragraph. */
     currentAsOf: (date: string) => ` Current as of ${date}.`,
-    totalsHeading: 'Corpus totals',
+    totalsHeading: 'The federal rulebook in numbers',
     deduplicated: {
-      eyebrow: 'Deduplicated words in the CFR',
+      eyebrow: 'Total federal regulation',
       note:
-        'Each scope counted exactly once. Where two or more agencies administer the same ' +
-        'scope, its words are divided evenly between them, so the agency totals sum back to ' +
-        'the corpus. This is the honest answer to “how big is the CFR?”.',
+        'Every word of every rule, counted once. Where a rule is managed by more than one ' +
+        'agency, its words are split evenly between them — never counted twice. This is the ' +
+        'honest answer to “how much federal regulation is there?”.',
     },
-    attributed: { eyebrow: 'Attributed words' },
+    attributed: { eyebrow: 'Counting shared rules once per agency' },
     shared: {
-      eyebrow: 'Words under shared jurisdiction',
-      scopeCount: (n: string) => `${n} scopes are claimed by more than one agency`,
-      corpusShare: (pct: string) => ` — ${pct} of the corpus`,
+      eyebrow: 'Rules managed by more than one agency',
+      scopeCount: (n: string) => `${n} areas of the rulebook have more than one agency in charge`,
+      corpusShare: (pct: string) => ` — ${pct} of all regulation`,
       link: 'See who shares what →',
     },
     glanceLabel: 'Corpus at a glance',
@@ -243,11 +247,11 @@ export const STRINGS = {
       unmeasuredNote: (total: string) =>
         `Of ${total} structure nodes. Every one is listed with its reason.`,
     },
-    rankingHeading: 'Largest agencies by deduplicated words',
+    rankingHeading: 'Agencies with the most regulation',
     rankingCaption: 'Top 12 agencies',
     noRankingTitle: 'No agency has a measured total in this build',
     timelineCaption: 'Amendments published, all titles',
-    sharedCalloutTitle: 'Shared jurisdiction is a feature of the data',
+    sharedCalloutTitle: 'Some rules have more than one agency in charge',
     allAgenciesHeading: 'All agencies',
     agencyCount: (n: string) => `${n} agencies and sub-agencies.`,
     howCountedLink: 'How these are counted →',
@@ -256,8 +260,8 @@ export const STRINGS = {
   agencyIndex: {
     title: 'Agencies',
     description:
-      'Every federal agency and sub-agency with CFR references, with measured deduplicated ' +
-      'and attributed word counts and scope coverage.',
+      'Every federal agency and sub-agency with rules in the CFR, with measured word counts ' +
+      'and coverage.',
     eyebrow: 'Directory',
     standfirst: (agencies: string, parents: string) =>
       `${agencies} agencies and sub-agencies hold CFR references — ${parents} at the top ` +
@@ -274,13 +278,13 @@ export const STRINGS = {
     subAgencyEyebrow: (parent: string) => `Sub-agency of ${parent}`,
     agencyEyebrow: 'Federal agency',
     cardsLabel: 'Word counts',
-    deduplicated: {
-      eyebrow: 'Deduplicated',
-      note: 'Shared scopes divided evenly between claimants.',
-    },
     attributed: {
-      eyebrow: 'Attributed',
-      note: 'Shared scopes counted in full. Do not sum this across agencies.',
+      eyebrow: 'Total regulation',
+      note: 'Every rule this agency manages, in words — rules managed jointly with another agency count in full.',
+    },
+    deduplicated: {
+      eyebrow: 'Share of all regulation',
+      note: 'Jointly managed rules are split evenly between their agencies, so shares can be fairly compared across agencies.',
     },
     subtree: {
       eyebrow: 'Including sub-agencies',
@@ -288,27 +292,27 @@ export const STRINGS = {
       rolledUp: (children: string) => `Rolled up across ${children} sub-agencies.`,
     },
     scopes: {
-      eyebrow: 'CFR scopes',
+      eyebrow: 'Areas managed',
       measured: (n: string) => `${n} measured`,
       shared: (n: string) => `, ${n} shared`,
     },
-    sharedCalloutTitle: 'Shared jurisdiction',
+    sharedCalloutTitle: 'Rules managed jointly',
     sharedCallout: (n: string) =>
-      `${n} of this agency's scopes are administered jointly with another agency. Its ` +
-      'deduplicated total divides those words evenly among the claimants; its attributed total ' +
-      'counts them in full.',
+      `${n} of the areas this agency manages are managed jointly with another agency. In the ` +
+      '“total regulation” figure those rules count in full; in the “share” figure their words ' +
+      'are split evenly between the agencies in charge.',
     /** Joins a scope to its co-claimants inside the list item, hence the surrounding spaces. */
     sharedWith: 'with',
-    allSharedLink: 'All shared scopes across the CFR →',
+    allSharedLink: 'All jointly managed rules →',
     unresolvedCalloutTitle: 'Unresolved references',
-    scopesHeading: 'CFR scopes administered',
+    scopesHeading: 'Rules this agency manages',
     noScopes: 'eCFR records no CFR references for this agency.',
     columns: {
       citation: 'Citation',
-      scope: 'Scope',
+      scope: 'Rule area',
       level: 'Level',
       words: 'Words',
-      alsoAdministered: 'Also administered by',
+      alsoAdministered: 'Also managed by',
       officialText: 'Official text',
     },
     unresolvedScope: 'not resolved to a structure node',
@@ -429,44 +433,44 @@ export const STRINGS = {
   },
 
   sharedJurisdiction: {
-    title: 'Shared jurisdiction',
+    title: 'Shared rules',
     description:
-      'CFR scopes administered by more than one federal agency, ranked by word count, with ' +
-      'every claimant named.',
+      'Areas of the CFR managed by more than one federal agency, ranked by word count, with ' +
+      'every agency named.',
     eyebrow: 'Overlap',
-    heading: 'Scopes with more than one agency',
+    heading: 'Rules with more than one agency in charge',
     standfirst:
-      'Some parts of the CFR are administered jointly. Counting those scopes once per ' +
-      'claimant inflates any corpus total that sums agencies, so this site publishes both a ' +
-      'deduplicated total and an attributed one — and lists every overlap here.',
+      'Some federal rules are managed jointly by two or more agencies. Counting those rules ' +
+      'once per agency would inflate any total that adds agencies together, so this site also ' +
+      'publishes a “share” figure that splits them evenly — and lists every overlap here.',
     summaryLabel: 'Overlap summary',
     scopesCard: {
-      eyebrow: 'Shared scopes',
+      eyebrow: 'Jointly managed areas',
       note: (refsTotal: string) => `of ${refsTotal} agency references`,
     },
     wordsCard: {
-      eyebrow: 'Words under shared jurisdiction',
-      note: (pct: string) => `${pct} of the deduplicated corpus`,
+      eyebrow: 'Words managed jointly',
+      note: (pct: string) => `${pct} of all federal regulation`,
     },
     agenciesCard: {
       eyebrow: 'Agencies involved',
-      note: (claims: string, scopes: string) => `${claims} claims across ${scopes} scopes`,
+      note: (claims: string, scopes: string) => `${claims} claims across ${scopes} areas`,
     },
     maxCard: {
-      eyebrow: 'Most claimants on one scope',
-      note: 'agencies on a single scope',
+      eyebrow: 'Most agencies on one area',
+      note: 'agencies managing a single area',
     },
-    divisionCalloutTitle: 'How a shared scope is divided',
-    scopesHeading: 'Every shared scope',
+    divisionCalloutTitle: 'How a jointly managed rule is counted',
+    scopesHeading: 'Every jointly managed area',
     rankNote: 'Ranked by word count.',
     unmeasuredNote: (n: string) => ` ${n} could not be measured and are listed last.`,
-    empty: 'No scope in this dataset is claimed by more than one agency.',
-    caption: 'CFR scopes claimed by more than one agency',
+    empty: 'No area in this dataset is managed by more than one agency.',
+    caption: 'Areas of the CFR managed by more than one agency',
     columns: {
       citation: 'Citation',
-      scope: 'Scope',
+      scope: 'Rule area',
       words: 'Words',
-      claimants: 'Claimants',
+      claimants: 'Agencies',
       agencies: 'Agencies',
       officialText: 'Official text',
     },
@@ -606,6 +610,54 @@ export const STRINGS = {
       'data at all.',
     buildAsOf: (date: string) => `This build reflects the eCFR as of ${date}.`,
     buildDateUnknown: 'The source date for this build is not recorded.',
+  },
+
+  /**
+   * Hover definitions for the ⓘ marks. Each key doubles as the glossary anchor the mark
+   * links to: hover gives the one-liner, click gives the full entry — the two cannot drift.
+   */
+  infoTip: {
+    ariaSuffix: 'Full definition in the glossary.',
+    defs: {
+      'total-regulation':
+        'Every rule this agency manages, measured in words. Rules managed jointly with another agency count in full here.',
+      'share-of-regulation':
+        'This agency’s slice of all federal regulation. Jointly managed rules are split evenly between their agencies, so shares can be compared fairly.',
+      'total-federal-regulation':
+        'Every word of every federal rule in the CFR, counted once — jointly managed rules are never counted twice.',
+      'counting-shared-in-full':
+        'The same rulebook, but a rule managed by several agencies is counted once for each of them. Right for responsibility, wrong for adding up.',
+      'shared-rules':
+        'Rules managed by two or more agencies at once. The eCFR names every agency in charge.',
+      'areas-managed':
+        'A named slice of the rulebook — a whole title, a chapter, or a part — that the eCFR assigns to an agency.',
+      coverage:
+        'How many of the areas this agency manages could actually be measured in this build.',
+      'word-counts':
+        'Counted by parsing the official XML, with headings and boilerplate excluded. Never estimated.',
+    },
+  },
+
+  glossaryPage: {
+    title: 'Glossary',
+    description:
+      'Plain-language definitions of the terms used across the eCFR Atlas: the CFR, the ' +
+      'eCFR, total regulation, shares, jointly managed rules, and more.',
+    eyebrow: 'Plain language',
+    heading: 'The terms on this site, explained',
+    standfirst:
+      'Every ⓘ mark on the site links to an entry on this page. No legal background assumed.',
+  },
+
+  faqPage: {
+    title: 'FAQ',
+    description:
+      'Common questions about the eCFR, the CFR, and how this site measures federal ' +
+      'regulation.',
+    eyebrow: 'Questions',
+    heading: 'Frequently asked questions',
+    standfirst:
+      'What the federal rulebook is, where these numbers come from, and what this site is for.',
   },
 
   notFound: {

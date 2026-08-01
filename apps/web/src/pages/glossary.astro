@@ -1,0 +1,139 @@
+---
+/**
+ * The glossary every ⓘ mark on the site links into.
+ *
+ * Entry ids MUST match the keys of STRINGS.infoTip.defs — the InfoTip component builds its
+ * href from the key, so a renamed id here silently strands every mark that pointed at it.
+ * Additional entries (terms with no ⓘ yet) are fine; missing ones are not.
+ *
+ * Prose stays in this file per the strings-module policy: these sentences interleave links
+ * and emphasis, and splitting them into string fragments would make them untranslatable.
+ */
+import PageHeader from '../components/PageHeader.astro';
+import { STRINGS } from '../constants/strings';
+import * as route from '../data/routes';
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title={STRINGS.glossaryPage.title}
+  description={STRINGS.glossaryPage.description}
+  section="glossary"
+>
+  <PageHeader
+    eyebrow={STRINGS.glossaryPage.eyebrow}
+    title={STRINGS.glossaryPage.heading}
+    standfirst={STRINGS.glossaryPage.standfirst}
+  />
+
+  <div class="prose-page">
+    <h2 id="the-cfr">The CFR</h2>
+    <p>
+      The <strong>Code of Federal Regulations</strong> is the official rulebook of the United
+      States federal government — every general and permanent rule its agencies have issued,
+      organised into 50 numbered <em>titles</em> by subject (Title 21 is food and drugs, Title
+      40 is the environment, and so on). Laws passed by Congress say <em>what</em> must happen;
+      the CFR is where agencies spell out <em>how</em>.
+    </p>
+
+    <h2 id="the-ecfr">The eCFR</h2>
+    <p>
+      The <a href="https://www.ecfr.gov" rel="external noopener">electronic CFR</a> is the
+      continuously updated online edition of the CFR, published by the Office of the Federal
+      Register and the Government Publishing Office. It is updated within days of rule changes
+      — and it is the source this site measures. Note that the eCFR itself is an editorial
+      compilation, not the legally authoritative edition; see
+      <a href={route.about()}>about &amp; attribution</a>.
+    </p>
+
+    <h2 id="titles-chapters-parts">Titles, chapters, parts, sections</h2>
+    <p>
+      The rulebook nests like a book: a <strong>title</strong> covers a broad subject, a
+      <strong>chapter</strong> within it usually belongs to one agency, a <strong>part</strong>
+      covers one program or topic, and a <strong>section</strong> is the individual rule you
+      cite — “40 CFR 60.290” means title 40, part 60, section 60.290.
+    </p>
+
+    <h2 id="total-regulation">Total regulation</h2>
+    <p>
+      An agency's <strong>total regulation</strong> is every rule it manages, measured in
+      words. Where a rule is managed jointly with another agency, it counts <em>in full</em>
+      here — if two agencies are each fully responsible for a rule, each one's total should
+      reflect that. Because of this, adding every agency's total together counts jointly
+      managed rules more than once; use <a href="#share-of-regulation">shares</a> for sums.
+    </p>
+
+    <h2 id="share-of-regulation">Share of all regulation</h2>
+    <p>
+      An agency's <strong>share</strong> is its slice of the whole rulebook: jointly managed
+      rules are split evenly between the agencies in charge, so every word lands in exactly
+      one agency's share and shares can be fairly compared or added. When an agency manages
+      nothing jointly, its share and its total are the same number.
+    </p>
+
+    <h2 id="total-federal-regulation">Total federal regulation</h2>
+    <p>
+      The size of the whole rulebook in words, counting every rule once. This is the site's
+      headline number, and the honest answer to “how much federal regulation is there?”
+    </p>
+
+    <h2 id="counting-shared-in-full">Counting shared rules once per agency</h2>
+    <p>
+      The alternative corpus figure: the same rulebook, but a rule managed by several agencies
+      is counted once for <em>each</em> of them. It answers “how much regulation are agencies
+      responsible for, in total?” — a responsibility measure, not a size measure, which is why
+      it runs slightly higher than the total above.
+    </p>
+
+    <h2 id="shared-rules">Shared rules (joint management)</h2>
+    <p>
+      Some rules have more than one agency in charge — the EPA and the Department of Justice
+      share one chapter of environmental rules, for example. The eCFR names every agency for
+      each of these. <a href={route.sharedJurisdiction()}>See every jointly managed area →</a>
+    </p>
+
+    <h2 id="areas-managed">Areas managed (scopes)</h2>
+    <p>
+      The eCFR assigns each agency named slices of the rulebook — a whole title, a chapter, or
+      a single part. This site calls them <em>areas</em> (the data calls them
+      <em>scopes</em>). An agency's numbers are built by measuring each of its areas.
+    </p>
+
+    <h2 id="coverage">Coverage</h2>
+    <p>
+      How many of an agency's areas could actually be measured in the current build. When even
+      one area cannot be measured, the agency's totals are reported as unmeasured rather than
+      as a partial sum — a partial sum looks exactly like a real number, and this site never
+      publishes one.
+    </p>
+
+    <h2 id="word-counts">Word counts</h2>
+    <p>
+      Every count is produced by parsing the eCFR's own XML and counting the words of actual
+      regulation text — headings, authority notes, source citations and tables of contents are
+      excluded (measured at 18.4% of the text in a sample chapter). Nothing is estimated from
+      file sizes. The full rules are on the
+      <a href={route.methodology()}>methodology page</a>.
+    </p>
+
+    <h2 id="reserved">Reserved</h2>
+    <p>
+      A slot the rulebook keeps but that contains no rules — a placeholder for future use or
+      the site of a repealed rule. Reserved items show a word count of zero, which is a
+      measured fact, not a missing value.
+    </p>
+
+    <h2 id="not-measured">“Not measured” and the em dash (—)</h2>
+    <p>
+      When a value could not be measured, this site shows an em dash with the reason — never a
+      zero, and never a guess. Every unmeasured value in the build is listed on the
+      <a href={route.dataQuality()}>data quality page</a>.
+    </p>
+
+    <h2 id="amendments">Amendments</h2>
+    <p>
+      A change to a rule, published by the issuing agency. The amendment charts count sections
+      changed per month, dated by the day the change was published in the eCFR.
+    </p>
+  </div>
+</Base>

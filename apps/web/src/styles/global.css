@@ -590,6 +590,17 @@
   cursor: default;
 }
 
+/* The ⓘ beside a term: quiet until wanted, never underlined like a text link. */
+.info-tip {
+  margin-left: 0.3em;
+  font-size: 0.85em;
+  color: var(--color-ink-subtle);
+  text-decoration-line: none;
+}
+.info-tip:hover {
+  color: var(--color-accent);
+}
+
 /*
  * The theme toggle shows the CURRENT theme's icon; the switch is CSS-only off [data-theme],
  * which the pre-paint script in Base.astro always sets.

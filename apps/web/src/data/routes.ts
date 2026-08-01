@@ -37,6 +37,8 @@ export const methodology = (): string => '/methodology';
 export const dataQuality = (): string => '/data-quality';
 export const apiPage = (): string => '/api';
 export const about = (): string => '/about';
+export const glossary = (): string => '/glossary';
+export const faq = (): string => '/faq';
 
 export const agency = (slug: string): string => `/agency/${seg(slug)}`;
 export const title = (n: number): string => `/title/${seg(n)}`;
