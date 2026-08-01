@@ -507,3 +507,131 @@ describe('dangling upstream references (defect 5: two stale rows vetoing the cor
     expect(result.corpusDeduplicatedWords).toBe(1000);
   });
 });
+
+describe('cross-agency nesting (defect 6: shares must partition the corpus)', () => {
+  const dedupOf = (result: ReturnType<typeof computeRollups>, slug: string) =>
+    result.rollups.find((r) => r.agencySlug === slug)?.deduplicatedWordCount;
+
+  const expectConservation = (result: ReturnType<typeof computeRollups>) => {
+    const sum = result.rollups.reduce((acc, r) => acc + (r.deduplicatedWordCount ?? 0), 0);
+    expect(result.corpusDeduplicatedWords).toBe(sum);
+  };
+
+  it('divides a nested claim between inner and outer claimants instead of counting it twice', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('alpha', [{ title: 42, chapter: 'I' }]),
+        agency('beta', [{ title: 42, chapter: 'I', subchapter: 'A', part: '1' }]),
+      ],
+      resolver,
+    });
+
+    // Chapter I is 600 words; part 1 inside it is 100. The 500 exclusive words are alpha's
+    // alone; the 100 inside part 1 are administered by BOTH (alpha via the chapter claim,
+    // beta directly) and split evenly. Before this rule the totals were 600 + 100 = 700 over
+    // a 600-word chapter.
+    expect(dedupOf(result, 'alpha')).toBe(550);
+    expect(dedupOf(result, 'beta')).toBe(50);
+    expect(result.corpusDeduplicatedWords).toBe(600);
+    expectConservation(result);
+    expect(result.nestedScopePairs).toBe(1);
+    // Nesting is not identical-scope sharing: neither agency's scope is co-claimed.
+    expect(result.rollups.every((r) => r.sharedRefs === 0)).toBe(true);
+    expect(result.overlaps).toHaveLength(0);
+  });
+
+  it('telescopes a three-deep chain, remainder words to the canonical first', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('alpha', [{ title: 42, chapter: 'I' }]),
+        agency('beta', [{ title: 42, chapter: 'I', subchapter: 'A' }]),
+        agency('gamma', [{ title: 42, chapter: 'I', subchapter: 'A', part: '1' }]),
+      ],
+      resolver,
+    });
+
+    // chapter I (600) ⊃ subchapter A (300) ⊃ part 1 (100):
+    //   exclusive(chapter)   = 300 -> alpha
+    //   exclusive(subch A)   = 200 -> alpha, beta (100 each)
+    //   exclusive(part 1)    = 100 -> alpha, beta, gamma (34/33/33; remainder to alpha)
+    expect(dedupOf(result, 'alpha')).toBe(434);
+    expect(dedupOf(result, 'beta')).toBe(133);
+    expect(dedupOf(result, 'gamma')).toBe(33);
+    expect(result.corpusDeduplicatedWords).toBe(600);
+    expectConservation(result);
+    expect(result.nestedScopePairs).toBe(3);
+  });
+
+  it('composes identical-scope sharing with nesting', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('alpha', [{ title: 42, chapter: 'I' }]),
+        agency('beta', [{ title: 42, chapter: 'I' }]),
+        agency('gamma', [{ title: 42, chapter: 'I', subchapter: 'A', part: '1' }]),
+      ],
+      resolver,
+    });
+
+    // The chapter's 500 exclusive words split between its two identical claimants; part 1's
+    // 100 words split three ways among everyone whose claim covers them.
+    expect(dedupOf(result, 'alpha')).toBe(284); // 250 + 34 (remainder word)
+    expect(dedupOf(result, 'beta')).toBe(283); // 250 + 33
+    expect(dedupOf(result, 'gamma')).toBe(33);
+    expect(result.corpusDeduplicatedWords).toBe(600);
+    expectConservation(result);
+    // The identical share still reports as shared; the nested one still does not.
+    expect(result.overlaps).toHaveLength(1);
+    expect(result.rollups.find((r) => r.agencySlug === 'gamma')?.sharedRefs).toBe(0);
+  });
+
+  it('nulls every administrator when a nested region is unmeasured', () => {
+    const { nodes, measurements } = buildFixture();
+    measurements.set(
+      'title-42/chapter-II/part-4',
+      unavailable('unavailable_fetch_failed', 'eCFR returned 504 after the retry budget'),
+    );
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('alpha', [{ title: 42, chapter: 'II' }]),
+        agency('beta', [{ title: 42, chapter: 'II', part: '4' }]),
+      ],
+      resolver,
+    });
+
+    // Alpha's own chapter measured fine, but its exclusive words depend on the unmeasured
+    // part inside it — a share of an unknown quantity is unknown, whoever's claim the
+    // unknown sits in.
+    expect(dedupOf(result, 'alpha')).toBeNull();
+    expect(dedupOf(result, 'beta')).toBeNull();
+    expect(result.corpusDeduplicatedWords).toBeNull();
+  });
+
+  it('a parent and child agency with nested claims sum to the region once', () => {
+    const { nodes, measurements } = buildFixture();
+    const resolver = createScopeResolver(nodes, measurements);
+    const result = computeRollups({
+      agencies: [
+        agency('parent', [{ title: 42, chapter: 'I' }]),
+        agency('child', [{ title: 42, chapter: 'I', subchapter: 'A' }], 'parent'),
+      ],
+      resolver,
+    });
+
+    // Subchapter A's 300 words are administered by both (order: child before parent);
+    // chapter I's 300 exclusive words are the parent's alone.
+    expect(dedupOf(result, 'parent')).toBe(450);
+    expect(dedupOf(result, 'child')).toBe(150);
+    const parentRow = result.rollups.find((r) => r.agencySlug === 'parent');
+    // The subtree total is the members' shares summed — the whole chapter, counted once.
+    expect(parentRow?.subtreeDeduplicated).toBe(600);
+    expect(parentRow?.subtreeAttributed).toBe(600);
+    expectConservation(result);
+  });
+});
