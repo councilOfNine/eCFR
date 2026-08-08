@@ -28,6 +28,10 @@ export const SITE = {
   repoUrl: env.PUBLIC_REPO_URL ?? 'https://github.com/councilOfNine/eCFR',
   /** Contact for the deployment operator. Null renders no contact affordance. */
   contactEmail: env.PUBLIC_CONTACT_EMAIL ?? null,
+  /** Organisation operating this deployment, credited in the footer ("Built by …"). */
+  operatorName: env.PUBLIC_OPERATOR_NAME ?? 'FixIT Works',
+  /** The operator's home page — the footer credit links here. */
+  operatorUrl: env.PUBLIC_OPERATOR_URL ?? 'https://fixit.works',
   /**
    * The official eCFR home. Not deployment-varying, but centralised here because rule 4 (link
    * to ecfr.gov, never fetch it) makes every occurrence of this URL a link — one constant keeps

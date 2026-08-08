@@ -97,6 +97,8 @@ export const STRINGS = {
     sourceDateUnknown: 'Source date unknown for this build.',
     /** Leading space matches the conditional interpolation it replaces. */
     syncRun: (runId: number) => ` Sync run #${runId}.`,
+    /** Precedes the linked operator name in the bottom bar: "Built by FixIT Works". */
+    builtBy: 'Built by',
   },
 
   wordCount: {
