@@ -31,7 +31,12 @@ const nav = [
       </span>
     </a>
 
-    <nav aria-label={STRINGS.a11y.primaryNav} class="order-3 flex w-full gap-5 overflow-x-auto md:order-none md:w-auto">
+    {/*
+      On phones the nav wraps to as many rows as it needs. It used to overflow-x-scroll on one
+      row, which cropped the last items behind the viewport edge with no visible affordance —
+      "Data quality" rendered as "Dat" and looked broken rather than scrollable.
+    */}
+    <nav aria-label={STRINGS.a11y.primaryNav} class="order-3 flex w-full flex-wrap gap-x-5 gap-y-1 md:order-none md:w-auto md:flex-nowrap">
       {
         nav.map((item) => (
           <a
