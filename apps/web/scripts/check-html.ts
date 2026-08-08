@@ -172,7 +172,7 @@ const unescapeXml = (value: string): string =>
 const sitemap = await readFile(join(DIST, 'sitemap.xml'), 'utf8');
 const listed = new Set(
   [...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((match) => {
-    const loc = unescapeXml(match[1]);
+    const loc = unescapeXml(match[1] ?? '');
     try {
       return decodeURIComponent(new URL(loc).pathname);
     } catch {
