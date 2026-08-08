@@ -569,6 +569,16 @@
     color: var(--color-ink-muted);
     margin-left: 0;
   }
+
+  /*
+   * Long-form pages (FAQ, glossary, methodology, about) read as one centred column: the page
+   * header and the prose share a single measure instead of hugging the left edge of the
+   * 76rem shell with the whole right half of a wide viewport empty.
+   */
+  .prose-shell {
+    max-width: 46rem;
+    margin-inline: auto;
+  }
 }
 
 @layer utilities {
@@ -596,6 +606,11 @@
   font-size: 0.85em;
   color: var(--color-ink-subtle);
   text-decoration-line: none;
+}
+/* Em-sizing is right beside body text but comical inside a 3xl page heading — cap it there. */
+h1 .info-tip {
+  font-size: 1rem;
+  vertical-align: super;
 }
 .info-tip:hover {
   color: var(--color-accent);

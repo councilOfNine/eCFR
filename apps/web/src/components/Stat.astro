@@ -23,7 +23,7 @@ const isMeasurement = typeof value !== 'string';
 ---
 
 <div class="card">
-  <p class="eyebrow">{label}</p>
+  <p class="eyebrow">{label}<slot name="tip" /></p>
   <p class="mt-1.5">
     {
       isMeasurement ? (

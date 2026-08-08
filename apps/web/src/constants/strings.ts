@@ -633,6 +633,8 @@ export const STRINGS = {
         'Rules managed by two or more agencies at once. The eCFR names every agency in charge.',
       'areas-managed':
         'A named slice of the rulebook — a whole title, a chapter, or a part — that the eCFR assigns to an agency.',
+      'titles-chapters-parts':
+        'The CFR is organised into 50 numbered titles, one per broad subject — Title 21 is food and drugs, Title 40 the environment. Each title nests into chapters, parts, and sections.',
       coverage:
         'How many of the areas this agency manages could actually be measured in this build.',
       'word-counts':

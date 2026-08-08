@@ -1,4 +1,5 @@
 ---
+import InfoTip from '../../components/InfoTip.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import WordCountView from '../../components/WordCount.astro';
 import { STRINGS } from '../../constants/strings';
@@ -29,7 +30,9 @@ const active = titles.filter((t) => !t.reserved);
     eyebrow={STRINGS.titleIndex.eyebrow}
     title={STRINGS.titleIndex.title}
     standfirst={STRINGS.titleIndex.standfirst(formatInt(active.length))}
-  />
+  >
+    <InfoTip slot="title-tip" term="titles-chapters-parts" />
+  </PageHeader>
 
   <div class="table-wrap">
     <table class="data-table">

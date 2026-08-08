@@ -21,38 +21,40 @@ import Base from '../layouts/Base.astro';
   title={STRINGS.notFound.title}
   description={STRINGS.notFound.description}
 >
-  <PageHeader
-    eyebrow={STRINGS.notFound.eyebrow}
-    title={STRINGS.notFound.heading}
-    standfirst={STRINGS.notFound.standfirst}
-  />
+  <div class="prose-shell">
+    <PageHeader
+      eyebrow={STRINGS.notFound.eyebrow}
+      title={STRINGS.notFound.heading}
+      standfirst={STRINGS.notFound.standfirst}
+    />
 
-  <div class="prose-page">
-    <h2>{STRINGS.notFound.whereHeading}</h2>
-    <ul>
-      <li><a href={route.home()}>Dashboard</a> — corpus totals and the agency ranking.</li>
-      <li><a href={route.titleIndex()}>Browse by CFR title</a> — then chapter, then part.</li>
-      <li><a href={route.agencyIndex()}>Browse by agency</a> — filterable by name.</li>
-      <li>
-        <a href={route.sharedJurisdiction()}>Shared jurisdiction</a> — scopes with more than one
-        claimant.
-      </li>
-    </ul>
+    <div class="prose-page">
+      <h2>{STRINGS.notFound.whereHeading}</h2>
+      <ul>
+        <li><a href={route.home()}>Dashboard</a> — corpus totals and the agency ranking.</li>
+        <li><a href={route.titleIndex()}>Browse by CFR title</a> — then chapter, then part.</li>
+        <li><a href={route.agencyIndex()}>Browse by agency</a> — filterable by name.</li>
+        <li>
+          <a href={route.sharedJurisdiction()}>Shared jurisdiction</a> — scopes with more than one
+          claimant.
+        </li>
+      </ul>
 
-    <h2>{STRINGS.notFound.urlShapesHeading}</h2>
-    <ul>
-      <li><code>/title/40</code> — a CFR title</li>
-      <li><code>/title/40/chapter/I</code> — a chapter, by Roman numeral</li>
-      <li><code>/title/40/part/60</code> — a part, with its full text</li>
-      <li><code>/title/26/part/1/A</code> — one subpart of a part too large to serve whole</li>
-      <li><code>/agency/environmental-protection-agency</code> — an agency</li>
-    </ul>
+      <h2>{STRINGS.notFound.urlShapesHeading}</h2>
+      <ul>
+        <li><code>/title/40</code> — a CFR title</li>
+        <li><code>/title/40/chapter/I</code> — a chapter, by Roman numeral</li>
+        <li><code>/title/40/part/60</code> — a part, with its full text</li>
+        <li><code>/title/26/part/1/A</code> — one subpart of a part too large to serve whole</li>
+        <li><code>/agency/environmental-protection-agency</code> — an agency</li>
+      </ul>
 
-    <p>
-      Not every scope has a page of its own: subtitles and subchapters are real levels of the CFR
-      but carry no standalone content, so links to them resolve to the nearest title or chapter.
-      For anything this site does not cover, the official text is at
-      <a href={SITE.ecfrHomeUrl} rel="external noopener"> ecfr.gov</a>.
-    </p>
+      <p>
+        Not every scope has a page of its own: subtitles and subchapters are real levels of the CFR
+        but carry no standalone content, so links to them resolve to the nearest title or chapter.
+        For anything this site does not cover, the official text is at
+        <a href={SITE.ecfrHomeUrl} rel="external noopener"> ecfr.gov</a>.
+      </p>
+    </div>
   </div>
 </Base>

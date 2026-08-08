@@ -125,7 +125,9 @@ const sharedShare = shareOf(corpus.shared, corpus.deduplicated);
       value={formatInt(corpus.titles)}
       note={STRINGS.dashboard.stats.titlesNote(corpus.titles_reserved)}
       href={route.titleIndex()}
-    />
+    >
+      <InfoTip slot="tip" term="titles-chapters-parts" />
+    </Stat>
     <Stat
       label={STRINGS.dashboard.stats.parts}
       value={formatInt(corpus.parts)}
