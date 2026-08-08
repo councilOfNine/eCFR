@@ -52,3 +52,4 @@ fixtures/raw/*
 # part of the test. The exclusions above still cover title-12.xml (37M) and structure-12.json
 # (2.3M), which are build scratch and are not read by anything under test.
 !fixtures/raw/structure-3.json
+.gstack/
