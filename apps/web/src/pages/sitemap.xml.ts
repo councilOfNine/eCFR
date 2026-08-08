@@ -6,7 +6,12 @@
  * `routes()`. A sitemap that advertises 404s is worse than no sitemap for a reference tool that
  * people reach through search.
  *
- * ~11,100 URLs, comfortably inside the 50,000-URL / 50 MB per-file limit, so no index file.
+ * The reverse direction — a page that was emitted but is missing from the static list below —
+ * is asserted by scripts/check-html.ts against the built output, because it has already
+ * happened: the glossary and FAQ shipped as new .astro files with no entry here, and the
+ * site's two newest pages were invisible to search until the check existed.
+ *
+ * ~10,650 URLs, comfortably inside the 50,000-URL / 50 MB per-file limit, so no index file.
  */
 import type { APIRoute } from 'astro';
 import { SITE } from '../constants/site';
@@ -40,6 +45,8 @@ export const GET: APIRoute = async ({ site }) => {
     route.titleIndex(),
     route.sharedJurisdiction(),
     route.methodology(),
+    route.glossary(),
+    route.faq(),
     route.dataQuality(),
     route.apiPage(),
     route.about(),

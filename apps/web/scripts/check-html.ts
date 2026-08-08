@@ -148,6 +148,64 @@ for (const page of pages) {
   }
 }
 
+// ── the sitemap is the exact set of built pages ──
+// sitemap.xml is generated from routes() plus a hand-kept list of static pages
+// (src/pages/sitemap.xml.ts); the HTML comes from getStaticPaths. The two held equal until the
+// glossary and FAQ shipped as new .astro files with no sitemap entry — nothing failed, and the
+// site's two newest pages were simply invisible to search engines. Both directions are asserted
+// so neither list can drift again: a built page missing from the sitemap is unadvertised, and a
+// sitemap entry with no page behind it is an advertised 404.
+const XML_ENTITIES: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+  '&apos;': "'",
+  '&quot;': '"',
+};
+const unescapeXml = (value: string): string =>
+  value.replace(/&(?:lt|gt|amp|apos|quot);/g, (entity) => XML_ENTITIES[entity] ?? entity);
+
+// Locs are percent-encoded (routes.ts encodes every segment — CFR identifiers include spaces,
+// commas and brackets, e.g. part `S 50` and chapter `IX [RESERVED]`); the build writes output
+// directories under the DECODED names. Comparison happens on decoded identity, which is also
+// what the server matches when it resolves a request against the asset tree.
+const sitemap = await readFile(join(DIST, 'sitemap.xml'), 'utf8');
+const listed = new Set(
+  [...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((match) => {
+    const loc = unescapeXml(match[1]);
+    try {
+      return decodeURIComponent(new URL(loc).pathname);
+    } catch {
+      findings.push({ page: 'sitemap.xml', message: `malformed <loc>: ${loc}` });
+      return loc;
+    }
+  }),
+);
+// format: 'directory' emits every page as <path>/index.html; canonical URLs have no trailing
+// slash, so `about/index.html` is listed as `/about` and the root index as `/`.
+const pageToPath = (rel: string): string =>
+  rel === 'index.html' ? '/' : `/${rel.replace(/\/index\.html$/, '').replace(/\.html$/, '')}`;
+// 404.html is the error document — served on every unknown URL, correctly absent from the map.
+const builtPaths = new Set(
+  pages
+    .map((page) => relative(DIST, page))
+    .filter((rel) => rel !== '404.html')
+    .map(pageToPath),
+);
+for (const path of builtPaths) {
+  if (!listed.has(path)) {
+    findings.push({ page: 'sitemap.xml', message: `built page ${path} is not listed` });
+  }
+}
+for (const path of listed) {
+  if (!builtPaths.has(path)) {
+    findings.push({
+      page: 'sitemap.xml',
+      message: `lists ${path}, which no built page backs — an advertised 404`,
+    });
+  }
+}
+
 if (findings.length > 0) {
   console.error(`html check: FAIL — ${findings.length} problem(s) across ${pages.length} pages\n`);
   for (const finding of findings.slice(0, 50))
