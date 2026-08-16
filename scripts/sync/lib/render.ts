@@ -19,7 +19,7 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, relative, resolve as resolvePath } from 'node:path';
 
 import type { FlatNode } from './structure.js';
 
@@ -97,6 +97,25 @@ function slugSegment(value: string): string {
  */
 export function contentKeyFor(route: string): string {
   return `parts${route}`;
+}
+
+/**
+ * The inverse: content key -> the file `snapshot-dir.ts` opens as `content/${key}.html`.
+ *
+ * Lives beside `contentKeyFor` because the two must agree; the hydration step rebuilds the
+ * whole content directory through this function, from keys listed out of the R2 bucket.
+ *
+ * Those keys are written by this pipeline, but they arrive over the network, and a key
+ * carrying `../` would otherwise place a file anywhere the process can write. Refusing is
+ * cheap and the check does not depend on trusting the bucket.
+ */
+export function contentPathFor(contentDir: string, contentKey: string): string {
+  const target = resolvePath(contentDir, `${contentKey}.html`);
+  const rel = relative(contentDir, target);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`refusing to write ${contentKey}: it escapes ${contentDir}`);
+  }
+  return target;
 }
 
 function routeFor(node: FlatNode): string {

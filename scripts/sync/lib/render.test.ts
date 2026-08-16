@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   assertFileBudget,
   buildManifest,
+  contentKeyFor,
+  contentPathFor,
   FILE_BUDGET_LIMIT,
   FileBudgetError,
   MAX_ASSET_BYTES,
@@ -277,5 +279,36 @@ describe('wrapFragment', () => {
     });
     expect(html).not.toContain('<script>');
     expect(html).toContain('&amp;b=2');
+  });
+});
+
+/**
+ * `contentPathFor` is the inverse of `contentKeyFor`, and the hydration step rebuilds the whole
+ * content directory through it from keys listed out of R2. A key that escapes the directory
+ * would place a file anywhere the sync process can write, so that is asserted rather than
+ * assumed — and the round trip is asserted too, because the two functions drifting apart would
+ * make the build open paths nothing ever wrote.
+ */
+describe('contentPathFor', () => {
+  const dir = '/snap/content';
+
+  it('round-trips a route through the key back to the file the build opens', () => {
+    const key = contentKeyFor('/title-40/chapter-I/part-60');
+    expect(key).toBe('parts/title-40/chapter-I/part-60');
+    expect(contentPathFor(dir, key)).toBe('/snap/content/parts/title-40/chapter-I/part-60.html');
+  });
+
+  it('keeps identifiers that are not path-safe inside the directory', () => {
+    expect(contentPathFor(dir, 'parts/title-41/part-101-14 & 101-15')).toBe(
+      '/snap/content/parts/title-41/part-101-14 & 101-15.html',
+    );
+  });
+
+  it('refuses a key that climbs out of the content directory', () => {
+    expect(() => contentPathFor(dir, 'parts/../../../etc/evil')).toThrow(/escapes/);
+  });
+
+  it('refuses an absolute key', () => {
+    expect(() => contentPathFor(dir, '/etc/evil')).toThrow(/escapes/);
   });
 });

@@ -54,8 +54,13 @@ function sign(
   key: string,
   body: Buffer,
   extraHeaders: Record<string, string>,
+  query: Record<string, string> = {},
 ): SignedRequest {
-  const url = new URL(`${config.endpoint}/${config.bucket}/${encodeKey(key)}`);
+  // An empty key addresses the bucket itself, which is what ListObjectsV2 does. Appending the
+  // separator anyway would sign `/bucket/` while the request went to `/bucket`, and the
+  // mismatch surfaces as SignatureDoesNotMatch rather than as a routing error.
+  const path = key === '' ? config.bucket : `${config.bucket}/${encodeKey(key)}`;
+  const url = new URL(`${config.endpoint}/${path}`);
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   const dateStamp = amzDate.slice(0, 8);
@@ -73,10 +78,19 @@ function sign(
   const canonicalHeaders = sortedKeys.map((h) => `${h}:${(headers[h] ?? '').trim()}\n`).join('');
   const signedHeaders = sortedKeys.join(';');
 
+  // Canonical query: sorted by encoded name, both halves RFC 3986 encoded. Building the signed
+  // string and the request URL from this one map keeps them from drifting apart.
+  const canonicalQuery = Object.keys(query)
+    .map((name) => [encodeRfc3986(name), encodeRfc3986(query[name] ?? '')] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&');
+  if (canonicalQuery !== '') url.search = canonicalQuery;
+
   const canonicalRequest = [
     method,
     url.pathname,
-    '', // no query string on PUT/HEAD of an object
+    canonicalQuery,
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -102,6 +116,32 @@ export interface ObjectSink {
   put(key: string, body: Buffer | string, contentType: string): Promise<number>;
   readonly writes: number;
   readonly bytes: number;
+}
+
+const XML_ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+};
+
+/**
+ * ListObjectsV2 returns XML. The only fields this pipeline reads are `<Key>` and the
+ * truncation pair, so the response is scanned rather than parsed — the same reasoning that
+ * keeps the SigV4 signing here instead of pulling in the AWS SDK.
+ *
+ * Keys are XML-escaped in the response and CFR identifiers really do contain `&` (part
+ * `101-14 & 101-15` shapes), so unescaping is not optional decoration: skip it and those
+ * objects are requested under a key that does not exist.
+ */
+function parseListResponse(xml: string): { keys: string[]; nextToken: string | null } {
+  const decode = (value: string): string =>
+    value.replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => XML_ENTITIES[entity] ?? entity);
+  const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => decode(m[1] ?? ''));
+  const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+  const token = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml);
+  return { keys, nextToken: truncated && token ? decode(token[1] ?? '') : null };
 }
 
 export class R2Client implements ObjectSink {
@@ -146,6 +186,50 @@ export class R2Client implements ObjectSink {
       if (attempt < 3) await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
     }
     this.#log.error('R2 PUT failed after 3 attempts', { key });
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  /**
+   * Every key under `prefix`, following continuation tokens to the end.
+   *
+   * A page cap of 1000 is the S3 maximum; the content bucket holds ~10,300 objects, so this
+   * pages. Returning the whole list rather than streaming it keeps the caller simple — the
+   * keys are a few hundred KB, unlike the objects they name.
+   */
+  async list(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let token: string | null = null;
+    do {
+      const query: Record<string, string> = { 'list-type': '2', prefix, 'max-keys': '1000' };
+      if (token !== null) query['continuation-token'] = token;
+      const { url, headers } = sign(this.#config, 'GET', '', Buffer.alloc(0), {}, query);
+      const response = await fetch(url, { method: 'GET', headers });
+      if (!response.ok) {
+        throw new Error(`R2 LIST ${prefix} -> HTTP ${response.status} ${await response.text()}`);
+      }
+      const page = parseListResponse(await response.text());
+      keys.push(...page.keys);
+      token = page.nextToken;
+    } while (token !== null);
+    return keys;
+  }
+
+  /** Object body, or null when the key is absent — a 404 is an answer, not a failure. */
+  async get(key: string): Promise<Buffer | null> {
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const { url, headers } = sign(this.#config, 'GET', key, Buffer.alloc(0), {});
+      try {
+        const response = await fetch(url, { method: 'GET', headers });
+        if (response.status === 404) return null;
+        if (response.ok) return Buffer.from(await response.arrayBuffer());
+        lastError = new Error(`R2 GET ${key} -> HTTP ${response.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
+    }
+    this.#log.error('R2 GET failed after 3 attempts', { key });
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 }
