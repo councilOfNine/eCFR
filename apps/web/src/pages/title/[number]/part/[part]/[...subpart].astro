@@ -57,13 +57,22 @@ const isSliceIndex = part.slices.length > 0 && part.slice === null;
 const heading = part.reserved ? STRINGS.partPage.reservedHeading(part.display) : part.label;
 
 /**
- * Where each TOC row points. Three cases: a reserved range has no text to land on (plain
- * row); on a whole part or a slice page every listed section is in THIS page's content
- * (fragment); on a split-part index the text lives on a slice page (cross-page link into it,
- * resolved from the slice JSONs by the loader).
+ * Where each TOC row points. Four cases: a reserved range has no text to land on (plain row);
+ * a part whose body text this build could not render has nothing to jump to either, however
+ * complete its section list is (plain row); on a whole part or a slice page every listed
+ * section is in THIS page's content (fragment); on a split-part index the text lives on a
+ * slice page (cross-page link into it, resolved from the slice JSONs by the loader).
+ *
+ * The second case was missing, and the anchors it emitted pointed at ids that only exist
+ * inside rendered content — a dead in-page jump on every section of every textless part. It
+ * stayed invisible while content was complete and surfaced as 219,529 findings the first time
+ * a snapshot arrived without body text.
  */
 const tocRows: PartTocRow[] = part.section_list.map((section) => {
   if (section.reserved) return { section, href: null, samePage: false };
+  if (part.content_html === null && !isSliceIndex) {
+    return { section, href: null, samePage: false };
+  }
   if (!isSliceIndex) return { section, href: `#${section.anchor}`, samePage: true };
   const slice = part.slice_by_anchor?.[section.anchor];
   return slice === undefined
