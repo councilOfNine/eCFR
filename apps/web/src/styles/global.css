@@ -325,6 +325,16 @@
 
   .table-wrap {
     overflow-x: auto;
+    /*
+     * Makes this the containing block for the absolutely-positioned .visually-hidden spans the
+     * table's cells emit (the coverage badge's screen-reader text). Without it their containing
+     * block is an ancestor above this one, so `overflow-x` here does not clip them: they sat at
+     * their layout position inside the 679px-wide table and stretched the DOCUMENT to 616px on
+     * a 375px screen, which is the sideways-scrolling phone page this project promises never to
+     * ship. The table itself was scrolling correctly the whole time, which is why containment
+     * checks on the markup saw nothing wrong.
+     */
+    position: relative;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
     background: var(--color-surface);
