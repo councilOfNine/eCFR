@@ -119,6 +119,40 @@ jobs:
           restore-keys: |
             sync-cache-${{ env.CACHE_EPOCH }}-
 
+      # Carry the previous night's rendered HTML forward.
+      #
+      # `content/` lives under ECFR_SNAPSHOT_DIR (`sync-output/snapshot`), which is deliberately
+      # OUTSIDE the cached `.sync-cache` — see the ECFR_SNAPSHOT_DIR comment below for why. That
+      # left it empty at the start of every run, and a delta only re-renders the handful of parts
+      # that moved that day. The snapshot published at the end therefore carried ~10 parts of
+      # body text instead of ~10,300: every reader page said its text was unavailable, and the
+      # site build failed on 219,529 dead TOC anchors. Five nightly runs in a row published such
+      # a snapshot before anyone noticed, because publishing happens before the build.
+      #
+      # Restoring the last published tarball first means each night starts from the full corpus
+      # and the delta re-renders on top of it. Missing object = first run ever (or a deliberate
+      # reset), which is not an error: the run proceeds and the guard below decides whether what
+      # it produced is fit to publish.
+      - name: Hydrate rendered content from the last published snapshot
+        if: ${{ !inputs.cold_cache }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mkdir -p "$SYNC_OUT_DIR/snapshot"
+          if pnpm exec wrangler r2 object get \
+               "ecfr-atlas-content/snapshot/latest.tar.gz" \
+               --file /tmp/previous-snapshot.tar.gz --remote 2>/tmp/hydrate.err; then
+            # Only `content/`. Every other file in the snapshot is derived from this run's data
+            # and must not be seeded from a previous one.
+            tar -xzf /tmp/previous-snapshot.tar.gz -C "$SYNC_OUT_DIR/snapshot" ./content
+            rm -f /tmp/previous-snapshot.tar.gz
+            echo "hydrated $(find "$SYNC_OUT_DIR/snapshot/content" -name '*.html' | wc -l) rendered parts"
+          else
+            echo "::warning title=No previous snapshot::Could not fetch snapshot/latest.tar.gz; this run renders from scratch."
+            cat /tmp/hydrate.err || true
+          fi
+
       # Exit codes from scripts/sync/delta.ts:
       #   0  synced and the publish gate advanced published_run_id
       #   1  synced, but the gate REFUSED to publish (a data-quality regression — do not deploy)
@@ -237,6 +271,28 @@ jobs:
         run: |
           if [ ! -d "$SYNC_OUT_DIR/snapshot" ]; then
             echo "::error title=No snapshot::$SYNC_OUT_DIR/snapshot was not produced. Refusing to build, because apps/web would silently fall back to the committed fixture and publish invented numbers."
+            exit 1
+          fi
+
+      # The snapshot may be real (the guard above) and still be unfit to publish: real structure
+      # and real numbers, but almost no rendered regulation text. That is what five consecutive
+      # nightly runs produced, and because publishing happens BEFORE the build, each one
+      # overwrote `latest.tar.gz` — the object every subsequent code deploy builds from — with a
+      # snapshot no build could accept. The site froze on its last good build for a week.
+      #
+      # `latest` is a promise that the object behind it produces a deployable site. This is the
+      # cheapest check that keeps that promise: a part that carries text has an .html file in
+      # content/, so comparing that count against the part count the run itself measured catches
+      # a hollow snapshot without opening a single file. Reserved parts legitimately have no
+      # text, so the bar is a majority rather than parity.
+      - name: Assert the snapshot carries its body text
+        if: ${{ !inputs.dry_run }}
+        run: |
+          parts=$(python3 -c "import json;print(json.load(open('$SYNC_OUT_DIR/snapshot/manifest.json'))['corpus']['parts'])")
+          rendered=$(find "$SYNC_OUT_DIR/snapshot/content" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')
+          echo "rendered $rendered of $parts parts"
+          if [ "$rendered" -lt $(( parts / 2 )) ]; then
+            echo "::error title=Bodiless snapshot::Only $rendered of $parts parts carry rendered text. Refusing to publish: this would overwrite snapshot/latest.tar.gz with an object no site build can accept. Check the hydrate step above — if it could not fetch the previous snapshot, fix that first; otherwise re-run with cold_cache to re-render the whole corpus."
             exit 1
           fi
 
